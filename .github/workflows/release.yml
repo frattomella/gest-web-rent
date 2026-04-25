@@ -29,12 +29,17 @@ jobs:
           rsync -av \
             --exclude='.git' \
             --exclude='.github' \
+            --exclude='.gitattributes' \
+            --exclude='.gitignore' \
             --exclude='build' \
             --exclude='node_modules' \
             --exclude='vendor' \
+            --exclude='.env' \
+            --exclude='.env.*' \
             --exclude='.DS_Store' \
             --exclude='*.zip' \
             --exclude='*.log' \
+            --exclude='*.tmp' \
             ./ build/gest-web-rent/
 
       - name: Create ZIP
