@@ -1,0 +1,49 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+.phpunit.result.cache
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+vendor/
+build/
+dist/
+coverage/
+
+# Release archives
+*.zip
+*.tar
+*.tar.gz
+
+# WordPress local installs/uploads/backups
+wp-config.php
+wp-content/uploads/
+wp-content/cache/
+wp-content/upgrade/
+wp-content/backup*/
+
+# Composer/Node artifacts when not intentionally used
+composer.phar
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

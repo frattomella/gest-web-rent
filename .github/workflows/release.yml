@@ -1,0 +1,49 @@
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate version files
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          grep -Eq "Version:[[:space:]]+${VERSION}$" gest-web-rent.php
+          grep -Eq "define\( 'GWR_VERSION', '${VERSION}' \);" gest-web-rent.php
+          grep -Eq "Stable tag:[[:space:]]+${VERSION}$" readme.txt
+
+      - name: Prepare plugin folder
+        run: |
+          mkdir -p build/gest-web-rent
+          rsync -av \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='build' \
+            --exclude='node_modules' \
+            --exclude='vendor' \
+            --exclude='.DS_Store' \
+            --exclude='*.zip' \
+            --exclude='*.log' \
+            ./ build/gest-web-rent/
+
+      - name: Create ZIP
+        run: |
+          cd build
+          zip -r gest-web-rent.zip gest-web-rent
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/gest-web-rent.zip
+          generate_release_notes: true
