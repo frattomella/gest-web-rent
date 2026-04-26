@@ -17,6 +17,8 @@ if command -v rsync >/dev/null 2>&1; then
     --exclude='.gitkeep' \
     --exclude='build' \
     --exclude='scripts' \
+    --exclude='blocks' \
+    --exclude='public/templates' \
     --exclude='node_modules' \
     --exclude='vendor' \
     --exclude='.env' \
@@ -31,7 +33,7 @@ else
   for item in ./*; do
     base="$(basename "${item}")"
     case "${base}" in
-      .git|.github|.gitattributes|.gitignore|.gitkeep|build|scripts|node_modules|vendor|.env|.env.*|.DS_Store|*.zip|*.log|*.tmp)
+      .git|.github|.gitattributes|.gitignore|.gitkeep|build|scripts|blocks|node_modules|vendor|.env|.env.*|.DS_Store|*.zip|*.log|*.tmp)
         continue
         ;;
     esac
@@ -39,6 +41,8 @@ else
   done
   find "${BUILD_DIR}/${PLUGIN_SLUG}" \( -name '.DS_Store' -o -name '*.zip' -o -name '*.log' -o -name '*.tmp' -o -name '.gitkeep' \) -delete
 fi
+
+rm -rf "${BUILD_DIR}/${PLUGIN_SLUG}/blocks" "${BUILD_DIR}/${PLUGIN_SLUG}/public/templates"
 
 test -f "${BUILD_DIR}/${PLUGIN_SLUG}/gest-web-rent.php"
 grep -q "Plugin Name: Gest Web Rent" "${BUILD_DIR}/${PLUGIN_SLUG}/gest-web-rent.php"

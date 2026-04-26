@@ -1,188 +1,169 @@
 # Gest Web Rent
 
-Gest Web Rent e un plugin WordPress per concessionari e rent company: gestisce veicoli a noleggio, disponibilita per date, catalogo frontend, schede veicolo e richieste tramite WhatsApp Business o email.
+Gest Web Rent e un plugin WordPress vetrina per noleggio veicoli. Gestisce veicoli, foto, indisponibilita, contatti WhatsApp Business/email e un catalogo frontend responsive con dettagli in overlay.
+
+Il plugin non usa l'editor WordPress come esperienza principale per creare veicoli: la gestione e interna, con form custom e tabelle dedicate.
 
 ## Requisiti
 
 - WordPress 6.0 o superiore.
 - PHP 7.4 o superiore.
-- Permalink WordPress attivi consigliati.
-- Repository GitHub pubblica o privata con release taggate `v*`.
-
-## Installazione manuale
-
-1. Carica la cartella `gest-web-rent` in `wp-content/plugins/`.
-2. Attiva il plugin da **Plugin > Plugin installati**.
-3. Vai in **Gest Web Rent > Impostazioni** e configura WhatsApp Business/email.
-4. Crea i veicoli dal menu **Gest Web Rent > Veicoli**.
-5. Inserisci in una pagina il blocco **Gest Web Rent - Catalogo veicoli** oppure lo shortcode.
+- Nessuna dipendenza obbligatoria da WooCommerce, Elementor o plugin esterni.
 
 ## Installazione da ZIP
 
-1. Non scaricare lo ZIP automatico del branch GitHub, perche GitHub crea cartelle tipo `gest-web-rent-main`.
-2. Scarica invece `gest-web-rent.zip` dalla sezione GitHub Releases.
-3. In alternativa genera lo ZIP localmente con `bash scripts/build-zip.sh`.
-4. In WordPress apri **Plugin > Aggiungi nuovo > Carica plugin**.
-5. Seleziona `build/gest-web-rent.zip` oppure lo ZIP della release.
-6. Installa e attiva il plugin.
+Non scaricare lo ZIP automatico del branch GitHub, perche GitHub crea cartelle tipo `gest-web-rent-main`.
 
-Lo ZIP corretto deve contenere:
-
-```text
-gest-web-rent/
-  gest-web-rent.php
-```
-
-Non deve contenere `gest-web-rent-main/` o cartelle generate automaticamente da GitHub.
-
-## Build ZIP locale
+Usa invece:
 
 ```bash
 bash scripts/build-zip.sh
 ```
 
-Output:
+Poi carica in WordPress:
 
 ```text
 build/gest-web-rent.zip
 ```
 
-Verifica:
+Lo ZIP corretto contiene:
 
-```bash
-unzip -l build/gest-web-rent.zip | head
+```text
+gest-web-rent/
+gest-web-rent/gest-web-rent.php
 ```
 
-Deve apparire `gest-web-rent/gest-web-rent.php`.
+## Admin
 
-## Configurazione WhatsApp Business
+Menu principale:
 
-In **Gest Web Rent > Impostazioni** inserisci il numero WhatsApp Business in formato internazionale, per esempio `+393331234567`.
+```text
+Gest Web Rent
+```
 
-Nel frontend il plugin genera link `wa.me` con un messaggio precompilato riferito al veicolo selezionato.
+Sottomenu:
 
-## Configurazione email
+- Dashboard
+- Veicoli
+- Aggiungi veicolo
+- Disponibilita
+- Impostazioni
 
-In **Gest Web Rent > Impostazioni** inserisci l'indirizzo email che deve ricevere le richieste di noleggio.
+La dashboard mostra riepilogo veicoli, veicoli attivi, veicoli in evidenza, blocchi futuri, stato WhatsApp/email e shortcode catalogo.
 
-Il catalogo e la scheda veicolo generano un link `mailto:` con oggetto precompilato.
+## Creare Un Veicolo
 
-## Uso shortcode
+Vai in **Gest Web Rent > Aggiungi veicolo**.
 
-Catalogo veicoli:
+Il form custom include:
+
+- dati principali;
+- prezzi;
+- regole noleggio;
+- servizi inclusi;
+- dotazioni;
+- descrizione e note;
+- foto veicolo tramite Media Library;
+- stato;
+- evidenza;
+- indisponibilita.
+
+I veicoli sono salvati nella tabella custom `wp_gwr_vehicles`, non come post WordPress.
+
+## Foto Veicolo
+
+Nel form veicolo puoi selezionare piu immagini dalla Media Library, impostare la copertina, riordinare le immagini e rimuoverle. Le foto sono salvate in `wp_gwr_vehicle_images`.
+
+## Disponibilita
+
+Le indisponibilita si gestiscono:
+
+- dentro la scheda custom del veicolo;
+- oppure dalla pagina **Gest Web Rent > Disponibilita**.
+
+La tabella `wp_gwr_availability` salva periodi con:
+
+- busy;
+- maintenance;
+- reserved;
+- unavailable.
+
+Tutti questi stati rendono il veicolo non disponibile nel catalogo quando le date richieste si sovrappongono.
+
+## Catalogo Frontend
+
+Inserisci in una pagina:
 
 ```text
 [gwr_catalog]
 ```
 
-Catalogo con limite:
-
-```text
-[gwr_catalog limit="6"]
-```
-
-Calendario disponibilita:
-
-```text
-[gwr_availability_calendar]
-```
-
-Scheda singolo veicolo:
-
-```text
-[gwr_vehicle id="123"]
-```
-
-Alias compatibili:
+Alias compatibile:
 
 ```text
 [gest_web_rent_catalog]
-[gest_web_rent_vehicle id="123"]
 ```
 
-## Blocchi Gutenberg
+Il catalogo include:
 
-Il plugin registra tre componenti editor dinamici:
+- filtro date integrato;
+- aggiornamento AJAX automatico al cambio date;
+- filtri veicolo;
+- card responsive a 2 colonne desktop e 1 colonna mobile;
+- dettaglio veicolo in overlay/modal con blur;
+- gallery foto;
+- info noleggio complete;
+- pulsanti WhatsApp/email con date selezionate.
 
-- **Gest Web Rent - Catalogo veicoli**: card veicoli con filtri data, marca/modello, posti e prezzo.
-- **Gest Web Rent - Calendario disponibilita**: selezione date e risultati disponibili.
-- **Gest Web Rent - Scheda veicolo**: gallery, dati noleggio, dati tecnici e box contatto.
+Non esistono piu come esperienza pubblica centrale:
 
-## Gestione veicoli
+- calendario separato;
+- scheda veicolo separata;
+- pagina single veicolo;
+- blocchi Gutenberg rigidi.
 
-Dal menu **Gest Web Rent** puoi creare veicoli come contenuti WordPress. Ogni veicolo supporta:
+## WhatsApp Ed Email
 
-- titolo;
-- descrizione;
-- riassunto;
-- immagine in evidenza;
-- marca, modello, versione e categoria;
-- prezzo giornaliero, settimanale e mensile;
-- cauzione e costo chilometri extra;
-- chilometraggio massimo giornaliero/mensile;
-- eta minima e patente richiesta;
-- posti;
-- porte;
-- anno;
-- chilometraggio;
-- alimentazione;
-- cambio;
-- sede ritiro;
-- assicurazione;
-- servizi inclusi;
-- dotazioni/accessori;
-- note ritiro/consegna;
-- URL galleria immagini.
+Configura in **Gest Web Rent > Impostazioni**:
 
-## Gestione disponibilita
+- numero WhatsApp Business;
+- email concessionario;
+- nome concessionario;
+- messaggio WhatsApp predefinito;
+- oggetto email predefinito;
+- corpo email predefinito;
+- testo privacy/nota contatto;
+- colore primario.
 
-Ogni veicolo ha una metabox **Disponibilita e impegni** dove inserire periodi:
+Il modal usa automaticamente le date selezionate nel catalogo.
 
-- occupato;
-- manutenzione;
-- riservato;
-- non disponibile.
+## Google Calendar
 
-Il catalogo e il calendario frontend confrontano le date richieste con questi periodi e mostrano solo i veicoli liberi. Gli aggiornamenti del plugin non cancellano questi dati perche sono salvati nella tabella WordPress `wp_gwr_availability`.
+Google Calendar non e usato come sistema principale. Una integrazione stabile richiederebbe OAuth/API/service account e una configurazione Google Cloud non adatta a un plugin installabile con facilita.
 
-## Aggiornamenti da GitHub
+La gestione principale resta interna e stabile. Una futura sincronizzazione Google Calendar potra essere aggiunta come modulo opzionale.
 
-Il plugin include un updater interno leggero basato sulle GitHub Releases della repository:
+## Aggiornamenti Da GitHub
+
+Il plugin usa GitHub Releases della repository:
 
 ```text
 https://github.com/frattomella/gest-web-rent
 ```
 
-Funzionamento:
-
-- legge la release piu recente da `releases/latest`;
-- legge il tag `v1.0.0`, `v1.0.1`, `v1.1.0`, ecc.;
-- normalizza la versione rimuovendo la `v`;
-- confronta la release con `GWR_VERSION`;
-- mostra l'aggiornamento nella schermata Plugin di WordPress;
-- scarica preferibilmente l'asset `gest-web-rent.zip`;
-- mantiene la cartella plugin `gest-web-rent`.
-
-Per repository pubbliche non serve token. Per repository private puoi inserire un **GitHub Access Token** in **Gest Web Rent > Impostazioni**. Il token non viene mai mostrato nel frontend ed e usato solo lato admin/server.
+L'updater cerca prima l'asset release `gest-web-rent.zip`; solo come fallback usa lo zipball GitHub e rinomina la cartella estratta in `gest-web-rent`.
 
 ## Versionamento
 
 Ogni release deve aggiornare:
 
 - header `Version` in `gest-web-rent.php`;
-- costante `GWR_VERSION` in `gest-web-rent.php`;
+- costante `GWR_VERSION`;
 - `Stable tag` in `readme.txt`;
 - `CHANGELOG.md`.
 
-Esempio release corrente:
+Release corrente:
 
-```bash
-git tag v1.0.1
-git push origin v1.0.1
+```text
+1.1.0
 ```
-
-Il workflow GitHub Actions crea automaticamente una release e allega `gest-web-rent.zip`.
-
-## Changelog essenziale
-
-Vedi `CHANGELOG.md`.

@@ -36,6 +36,8 @@ jobs:
             --exclude='.gitkeep' \
             --exclude='build' \
             --exclude='scripts' \
+            --exclude='blocks' \
+            --exclude='public/templates' \
             --exclude='node_modules' \
             --exclude='vendor' \
             --exclude='.env' \
