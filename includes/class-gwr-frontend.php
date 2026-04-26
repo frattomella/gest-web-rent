@@ -18,6 +18,9 @@ class GWR_Frontend {
 	 */
 	public static function init() {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'register_assets' ) );
+		add_shortcode( 'gwr_catalog', array( __CLASS__, 'catalog_shortcode' ) );
+		add_shortcode( 'gwr_availability_calendar', array( __CLASS__, 'availability_shortcode' ) );
+		add_shortcode( 'gwr_vehicle', array( __CLASS__, 'vehicle_shortcode' ) );
 		add_shortcode( 'gest_web_rent_catalog', array( __CLASS__, 'catalog_shortcode' ) );
 		add_shortcode( 'gest_web_rent_availability', array( __CLASS__, 'availability_shortcode' ) );
 		add_shortcode( 'gest_web_rent_vehicle', array( __CLASS__, 'vehicle_shortcode' ) );
@@ -69,13 +72,14 @@ class GWR_Frontend {
 				'title'          => __( 'Veicoli a noleggio', 'gest-web-rent' ),
 				'subtitle'       => __( 'Filtra per date e scegli il mezzo giusto per il tuo noleggio.', 'gest-web-rent' ),
 				'show_available' => 'yes',
+				'hide_busy'      => 'yes',
 			),
 			$atts,
 			'gest_web_rent_catalog'
 		);
 
 		$filters = self::current_filters();
-		$ids     = self::filtered_vehicle_ids( $filters );
+		$ids     = self::filtered_vehicle_ids( $filters, 'yes' === $atts['hide_busy'] );
 		$limit   = (int) $atts['limit'];
 
 		if ( $limit > 0 ) {
@@ -121,13 +125,14 @@ class GWR_Frontend {
 				'title'    => __( 'Verifica disponibilita', 'gest-web-rent' ),
 				'subtitle' => __( 'Seleziona le date di noleggio e visualizza i veicoli liberi.', 'gest-web-rent' ),
 				'columns'  => 3,
+				'vehicle_id' => 0,
 			),
 			$atts,
 			'gest_web_rent_availability'
 		);
 
 		$filters = self::current_filters();
-		$ids     = self::filtered_vehicle_ids( $filters );
+		$ids     = ! empty( $atts['vehicle_id'] ) ? array( absint( $atts['vehicle_id'] ) ) : self::filtered_vehicle_ids( $filters, true );
 
 		ob_start();
 		echo '<section class="gwr-availability-shell gwr-block" style="' . esc_attr( self::style_vars() ) . '">';
@@ -136,10 +141,10 @@ class GWR_Frontend {
 
 		if ( empty( $filters['date_from'] ) && empty( $filters['date_to'] ) ) {
 			echo '<div class="gwr-empty-state"><h3>' . esc_html__( 'Scegli un periodo per controllare la disponibilita.', 'gest-web-rent' ) . '</h3><p>' . esc_html__( 'Il sistema confronta le date richieste con gli impegni inseriti su ogni scheda veicolo.', 'gest-web-rent' ) . '</p></div>';
-		} elseif ( empty( $ids ) ) {
+		} elseif ( empty( $ids ) || ( ! empty( $atts['vehicle_id'] ) && ! GWR_CPT::is_available( absint( $atts['vehicle_id'] ), $filters['date_from'], $filters['date_to'] ) ) ) {
 			echo '<div class="gwr-empty-state"><h3>' . esc_html__( 'Nessun veicolo libero nel periodo selezionato.', 'gest-web-rent' ) . '</h3><p>' . esc_html__( 'Contatta il concessionario per alternative o rientri anticipati.', 'gest-web-rent' ) . '</p></div>';
 		} else {
-			echo '<div class="gwr-grid columns-' . esc_attr( max( 1, min( 4, absint( $atts['columns'] ) ) ) . '">';
+			echo '<div class="gwr-grid columns-' . esc_attr( max( 1, min( 4, absint( $atts['columns'] ) ) ) ) . '">';
 			foreach ( $ids as $vehicle_id ) {
 				echo self::card_markup( $vehicle_id, $filters, true );
 			}
@@ -197,6 +202,10 @@ class GWR_Frontend {
 			'date_from' => isset( $_GET['gwr_date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['gwr_date_from'] ) ) : '',
 			'date_to'   => isset( $_GET['gwr_date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['gwr_date_to'] ) ) : '',
 			'brand'     => isset( $_GET['gwr_brand'] ) ? sanitize_text_field( wp_unslash( $_GET['gwr_brand'] ) ) : '',
+			'category'  => isset( $_GET['gwr_category'] ) ? sanitize_text_field( wp_unslash( $_GET['gwr_category'] ) ) : '',
+			'fuel'      => isset( $_GET['gwr_fuel'] ) ? sanitize_text_field( wp_unslash( $_GET['gwr_fuel'] ) ) : '',
+			'transmission' => isset( $_GET['gwr_transmission'] ) ? sanitize_text_field( wp_unslash( $_GET['gwr_transmission'] ) ) : '',
+			'location'  => isset( $_GET['gwr_location'] ) ? sanitize_text_field( wp_unslash( $_GET['gwr_location'] ) ) : '',
 			'seats'     => isset( $_GET['gwr_seats'] ) ? absint( $_GET['gwr_seats'] ) : 0,
 			'price_max' => isset( $_GET['gwr_price_max'] ) ? absint( $_GET['gwr_price_max'] ) : 0,
 		);
@@ -208,7 +217,7 @@ class GWR_Frontend {
 	 * @param array $filters Filters.
 	 * @return array
 	 */
-	public static function filtered_vehicle_ids( $filters ) {
+	public static function filtered_vehicle_ids( $filters, $hide_busy = true ) {
 		$query = new WP_Query(
 			array(
 				'post_type'      => GWR_CPT::POST_TYPE,
@@ -224,7 +233,7 @@ class GWR_Frontend {
 		$ids = array();
 
 		foreach ( $query->posts as $vehicle_id ) {
-			if ( ! empty( $filters['date_from'] ) || ! empty( $filters['date_to'] ) ) {
+			if ( $hide_busy && ( ! empty( $filters['date_from'] ) || ! empty( $filters['date_to'] ) ) ) {
 				if ( ! GWR_CPT::is_available( $vehicle_id, $filters['date_from'], $filters['date_to'] ) ) {
 					continue;
 				}
@@ -239,6 +248,12 @@ class GWR_Frontend {
 
 			if ( ! empty( $filters['seats'] ) && (int) get_post_meta( $vehicle_id, '_gwr_seats', true ) < (int) $filters['seats'] ) {
 				continue;
+			}
+
+			foreach ( array( 'category', 'fuel', 'transmission', 'location' ) as $field ) {
+				if ( ! empty( $filters[ $field ] ) && false === stripos( (string) get_post_meta( $vehicle_id, '_gwr_' . $field, true ), $filters[ $field ] ) ) {
+					continue 2;
+				}
 			}
 
 			if ( ! empty( $filters['price_max'] ) ) {
@@ -266,10 +281,14 @@ class GWR_Frontend {
 		$html .= self::date_field( 'gwr_date_from', __( 'Ritiro', 'gest-web-rent' ), $filters['date_from'] );
 		$html .= self::date_field( 'gwr_date_to', __( 'Riconsegna', 'gest-web-rent' ), $filters['date_to'] );
 		$html .= '<label><span>' . esc_html__( 'Marca o modello', 'gest-web-rent' ) . '</span><input type="search" name="gwr_brand" value="' . esc_attr( $filters['brand'] ) . '" placeholder="' . esc_attr__( 'Fiat, BMW, Ducato...', 'gest-web-rent' ) . '" /></label>';
+		$html .= '<label><span>' . esc_html__( 'Categoria', 'gest-web-rent' ) . '</span><input type="search" name="gwr_category" value="' . esc_attr( $filters['category'] ) . '" placeholder="' . esc_attr__( 'Auto, furgone...', 'gest-web-rent' ) . '" /></label>';
+		$html .= '<label><span>' . esc_html__( 'Alimentazione', 'gest-web-rent' ) . '</span><input type="search" name="gwr_fuel" value="' . esc_attr( $filters['fuel'] ) . '" placeholder="' . esc_attr__( 'Diesel, elettrico...', 'gest-web-rent' ) . '" /></label>';
+		$html .= '<label><span>' . esc_html__( 'Cambio', 'gest-web-rent' ) . '</span><input type="search" name="gwr_transmission" value="' . esc_attr( $filters['transmission'] ) . '" placeholder="' . esc_attr__( 'Manuale, automatico...', 'gest-web-rent' ) . '" /></label>';
 		$html .= '<label><span>' . esc_html__( 'Posti minimi', 'gest-web-rent' ) . '</span><input type="number" min="0" name="gwr_seats" value="' . esc_attr( $filters['seats'] ) . '" placeholder="2" /></label>';
 		$html .= '<label><span>' . esc_html__( 'Prezzo max/giorno', 'gest-web-rent' ) . '</span><input type="number" min="0" name="gwr_price_max" value="' . esc_attr( $filters['price_max'] ) . '" placeholder="100" /></label>';
+		$html .= '<label><span>' . esc_html__( 'Sede', 'gest-web-rent' ) . '</span><input type="search" name="gwr_location" value="' . esc_attr( $filters['location'] ) . '" placeholder="' . esc_attr__( 'Roma, Milano...', 'gest-web-rent' ) . '" /></label>';
 		$html .= '</div>';
-		$html .= '<div class="gwr-filter-actions"><button class="gwr-button" type="submit">' . esc_html__( 'Filtra veicoli', 'gest-web-rent' ) . '</button><a class="gwr-button-secondary" href="' . esc_url( remove_query_arg( array( 'gwr_date_from', 'gwr_date_to', 'gwr_brand', 'gwr_seats', 'gwr_price_max' ) ) ) . '">' . esc_html__( 'Reset', 'gest-web-rent' ) . '</a></div>';
+		$html .= '<div class="gwr-filter-actions"><button class="gwr-button" type="submit">' . esc_html__( 'Filtra veicoli', 'gest-web-rent' ) . '</button><a class="gwr-button-secondary" href="' . esc_url( remove_query_arg( array( 'gwr_date_from', 'gwr_date_to', 'gwr_brand', 'gwr_category', 'gwr_fuel', 'gwr_transmission', 'gwr_seats', 'gwr_price_max', 'gwr_location' ) ) ) . '">' . esc_html__( 'Reset', 'gest-web-rent' ) . '</a></div>';
 		$html .= '</form>';
 
 		return $html;
@@ -345,6 +364,7 @@ class GWR_Frontend {
 		echo '<div class="gwr-card-actions">';
 		echo '<a class="gwr-button" href="' . esc_url( get_permalink( $vehicle_id ) ) . '">' . esc_html__( 'Scheda veicolo', 'gest-web-rent' ) . '</a>';
 		echo self::whatsapp_link( $vehicle_id, __( 'WhatsApp', 'gest-web-rent' ), 'gwr-button-secondary' );
+		echo self::email_link( $vehicle_id, __( 'Email', 'gest-web-rent' ), 'gwr-button-secondary' );
 		echo '</div>';
 		echo '</div></article>';
 
@@ -376,6 +396,7 @@ class GWR_Frontend {
 		echo '<main class="gwr-single-main">';
 		echo '<section class="gwr-content-card"><h2>' . esc_html__( 'Descrizione', 'gest-web-rent' ) . '</h2>' . wp_kses_post( wpautop( get_post_field( 'post_content', $vehicle_id ) ) ) . '</section>';
 		echo self::rental_terms_markup( $vehicle_id );
+		echo self::equipment_section_markup( $vehicle_id );
 		echo self::list_section_markup( $vehicle_id, '_gwr_included_services', __( 'Servizi inclusi', 'gest-web-rent' ) );
 		echo self::list_section_markup( $vehicle_id, '_gwr_accessories', __( 'Dotazioni e accessori', 'gest-web-rent' ) );
 		echo '</main>';
@@ -496,9 +517,11 @@ class GWR_Frontend {
 	private static function price_panel_markup( $vehicle_id ) {
 		$prices = array(
 			__( 'Giorno', 'gest-web-rent' )    => get_post_meta( $vehicle_id, '_gwr_price_day', true ),
+			__( 'Weekend', 'gest-web-rent' )   => get_post_meta( $vehicle_id, '_gwr_price_weekend', true ),
 			__( 'Settimana', 'gest-web-rent' ) => get_post_meta( $vehicle_id, '_gwr_price_week', true ),
 			__( 'Mese', 'gest-web-rent' )      => get_post_meta( $vehicle_id, '_gwr_price_month', true ),
 			__( 'Cauzione', 'gest-web-rent' )  => get_post_meta( $vehicle_id, '_gwr_deposit', true ),
+			__( 'Franchigia', 'gest-web-rent' ) => get_post_meta( $vehicle_id, '_gwr_deductible', true ),
 		);
 
 		$html = '<div class="gwr-price-panel">';
@@ -522,10 +545,18 @@ class GWR_Frontend {
 	private static function rental_terms_markup( $vehicle_id ) {
 		$items = array(
 			__( 'Km inclusi/giorno', 'gest-web-rent' ) => get_post_meta( $vehicle_id, '_gwr_max_km_day', true ),
+			__( 'Km inclusi/settimana', 'gest-web-rent' ) => get_post_meta( $vehicle_id, '_gwr_max_km_week', true ),
 			__( 'Km inclusi/mese', 'gest-web-rent' )   => get_post_meta( $vehicle_id, '_gwr_max_km_month', true ),
 			__( 'Costo km extra', 'gest-web-rent' )    => get_post_meta( $vehicle_id, '_gwr_extra_km_price', true ),
 			__( 'Eta minima', 'gest-web-rent' )        => get_post_meta( $vehicle_id, '_gwr_min_age', true ),
+			__( 'Anni minimi patente', 'gest-web-rent' ) => get_post_meta( $vehicle_id, '_gwr_min_license_years', true ),
 			__( 'Assicurazione', 'gest-web-rent' )     => get_post_meta( $vehicle_id, '_gwr_insurance', true ),
+			__( 'Assicurazione inclusa', 'gest-web-rent' ) => '1' === get_post_meta( $vehicle_id, '_gwr_insurance_included', true ) ? __( 'Si', 'gest-web-rent' ) : '',
+			__( 'Secondo conducente', 'gest-web-rent' ) => '1' === get_post_meta( $vehicle_id, '_gwr_second_driver', true ) ? __( 'Si', 'gest-web-rent' ) : '',
+			__( 'Consegna a domicilio', 'gest-web-rent' ) => '1' === get_post_meta( $vehicle_id, '_gwr_home_delivery', true ) ? __( 'Si', 'gest-web-rent' ) : '',
+			__( 'Durata minima', 'gest-web-rent' )     => get_post_meta( $vehicle_id, '_gwr_min_rental_days', true ),
+			__( 'Durata massima', 'gest-web-rent' )    => get_post_meta( $vehicle_id, '_gwr_max_rental_days', true ),
+			__( 'Note noleggio', 'gest-web-rent' )     => get_post_meta( $vehicle_id, '_gwr_rental_notes', true ),
 			__( 'Ritiro/consegna', 'gest-web-rent' )   => get_post_meta( $vehicle_id, '_gwr_pickup_notes', true ),
 		);
 
@@ -557,6 +588,50 @@ class GWR_Frontend {
 		}
 
 		$html = '<section class="gwr-content-card"><h2>' . esc_html( $title ) . '</h2><ul class="gwr-icon-list">';
+		foreach ( $items as $item ) {
+			$html .= '<li>' . esc_html( $item ) . '</li>';
+		}
+		$html .= '</ul></section>';
+
+		return $html;
+	}
+
+	/**
+	 * Render checkbox equipment section.
+	 *
+	 * @param int $vehicle_id Vehicle ID.
+	 * @return string
+	 */
+	private static function equipment_section_markup( $vehicle_id ) {
+		$labels = array(
+			'eq_air_conditioning' => __( 'Climatizzatore', 'gest-web-rent' ),
+			'eq_navigation'       => __( 'Navigatore', 'gest-web-rent' ),
+			'eq_bluetooth'        => __( 'Bluetooth', 'gest-web-rent' ),
+			'eq_apple_carplay'    => __( 'Apple CarPlay', 'gest-web-rent' ),
+			'eq_android_auto'     => __( 'Android Auto', 'gest-web-rent' ),
+			'eq_parking_sensors'  => __( 'Sensori parcheggio', 'gest-web-rent' ),
+			'eq_camera'           => __( 'Telecamera', 'gest-web-rent' ),
+			'eq_cruise_control'   => __( 'Cruise control', 'gest-web-rent' ),
+			'eq_abs'              => __( 'ABS', 'gest-web-rent' ),
+			'eq_esp'              => __( 'ESP', 'gest-web-rent' ),
+			'eq_airbag'           => __( 'Airbag', 'gest-web-rent' ),
+			'eq_winter_tires'     => __( 'Pneumatici invernali', 'gest-web-rent' ),
+			'eq_child_seat'       => __( 'Seggiolino', 'gest-web-rent' ),
+			'eq_snow_chains'      => __( 'Catene neve', 'gest-web-rent' ),
+		);
+		$items  = array();
+
+		foreach ( $labels as $key => $label ) {
+			if ( '1' === get_post_meta( $vehicle_id, '_gwr_' . $key, true ) ) {
+				$items[] = $label;
+			}
+		}
+
+		if ( empty( $items ) ) {
+			return '';
+		}
+
+		$html = '<section class="gwr-content-card"><h2>' . esc_html__( 'Dotazioni', 'gest-web-rent' ) . '</h2><ul class="gwr-icon-list">';
 		foreach ( $items as $item ) {
 			$html .= '<li>' . esc_html( $item ) . '</li>';
 		}
@@ -598,13 +673,12 @@ class GWR_Frontend {
 	 */
 	private static function contact_box_markup( $vehicle_id ) {
 		$settings = GWR_Admin::get_settings();
-		$html     = '<div class="gwr-contact-box"><h2>' . esc_html__( 'Contatta il concessionario', 'gest-web-rent' ) . '</h2><p>' . esc_html__( 'Richiedi disponibilita reale, preventivo e condizioni finali.', 'gest-web-rent' ) . '</p><div class="gwr-contact-actions">';
+		$filters  = self::current_filters();
+		$html     = '<div class="gwr-contact-box"><h2>' . esc_html__( 'Contatta il concessionario', 'gest-web-rent' ) . '</h2><p>' . esc_html( $settings['privacy_note'] ) . '</p>';
+		$html    .= '<form class="gwr-contact-dates" method="get"><label><span>' . esc_html__( 'Data inizio', 'gest-web-rent' ) . '</span><input type="date" name="gwr_date_from" value="' . esc_attr( $filters['date_from'] ) . '" /></label><label><span>' . esc_html__( 'Data fine', 'gest-web-rent' ) . '</span><input type="date" name="gwr_date_to" value="' . esc_attr( $filters['date_to'] ) . '" /></label><button class="gwr-button-secondary" type="submit">' . esc_html__( 'Aggiorna messaggio', 'gest-web-rent' ) . '</button></form>';
+		$html    .= '<div class="gwr-contact-actions">';
 		$html    .= self::whatsapp_link( $vehicle_id, __( 'Scrivi su WhatsApp', 'gest-web-rent' ), 'gwr-button' );
-
-		if ( ! empty( $settings['contact_email'] ) ) {
-			$subject = rawurlencode( sprintf( __( 'Richiesta noleggio: %s', 'gest-web-rent' ), get_the_title( $vehicle_id ) ) );
-			$html   .= '<a class="gwr-button-secondary" href="' . esc_url( 'mailto:' . sanitize_email( $settings['contact_email'] ) . '?subject=' . $subject ) . '">' . esc_html__( 'Invia email', 'gest-web-rent' ) . '</a>';
-		}
+		$html    .= self::email_link( $vehicle_id, __( 'Invia email', 'gest-web-rent' ), 'gwr-button-secondary' );
 
 		$html .= '</div></div>';
 
@@ -627,9 +701,56 @@ class GWR_Frontend {
 		}
 
 		$phone   = preg_replace( '/\D+/', '', $settings['whatsapp_number'] );
-		$message = rawurlencode( sprintf( __( 'Buongiorno, vorrei informazioni sul noleggio di: %s', 'gest-web-rent' ), get_the_title( $vehicle_id ) ) );
+		$message = rawurlencode( self::apply_placeholders( $settings['whatsapp_message'], $vehicle_id ) );
 
 		return '<a class="' . esc_attr( $class ) . '" target="_blank" rel="noopener noreferrer" href="' . esc_url( 'https://wa.me/' . $phone . '?text=' . $message ) . '">' . esc_html( $label ) . '</a>';
+	}
+
+	/**
+	 * Email link helper.
+	 *
+	 * @param int    $vehicle_id Vehicle ID.
+	 * @param string $label Link label.
+	 * @param string $class CSS class.
+	 * @return string
+	 */
+	private static function email_link( $vehicle_id, $label, $class ) {
+		$settings = GWR_Admin::get_settings();
+
+		if ( empty( $settings['contact_email'] ) ) {
+			return '';
+		}
+
+		$subject = rawurlencode( self::apply_placeholders( $settings['email_subject'], $vehicle_id ) );
+		$body    = rawurlencode( self::apply_placeholders( $settings['email_body'], $vehicle_id ) );
+
+		return '<a class="' . esc_attr( $class ) . '" href="' . esc_url( 'mailto:' . sanitize_email( $settings['contact_email'] ) . '?subject=' . $subject . '&body=' . $body ) . '">' . esc_html( $label ) . '</a>';
+	}
+
+	/**
+	 * Replace message placeholders.
+	 *
+	 * @param string $template Template.
+	 * @param int    $vehicle_id Vehicle ID.
+	 * @return string
+	 */
+	private static function apply_placeholders( $template, $vehicle_id ) {
+		$filters = self::current_filters();
+		$map     = array(
+			'{vehicle_title}' => get_the_title( $vehicle_id ),
+			'{brand}'         => get_post_meta( $vehicle_id, '_gwr_brand', true ),
+			'{model}'         => get_post_meta( $vehicle_id, '_gwr_model', true ),
+			'{version}'       => get_post_meta( $vehicle_id, '_gwr_version', true ),
+			'{daily_price}'   => self::format_price( get_post_meta( $vehicle_id, '_gwr_price_day', true ) ),
+			'{weekly_price}'  => self::format_price( get_post_meta( $vehicle_id, '_gwr_price_week', true ) ),
+			'{monthly_price}' => self::format_price( get_post_meta( $vehicle_id, '_gwr_price_month', true ) ),
+			'{start_date}'    => $filters['date_from'] ?: '-',
+			'{end_date}'      => $filters['date_to'] ?: '-',
+			'{vehicle_url}'   => get_permalink( $vehicle_id ),
+			'{site_name}'     => get_bloginfo( 'name' ),
+		);
+
+		return strtr( (string) $template, $map );
 	}
 
 	/**

@@ -1,0 +1,7 @@
+/*
+ * Compatibility stylesheet path.
+ *
+ * The active frontend stylesheet is public/assets/css/gwr-public.css.
+ * This file keeps the historical assets/css/frontend.css path available in
+ * release ZIPs for installations or checks that still look for it.
+ */

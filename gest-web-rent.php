@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Gest Web Rent
  * Plugin URI: https://github.com/frattomella/gest-web-rent
- * Description: Plugin WordPress per gestire veicoli a noleggio, disponibilita, catalogo, schede veicolo e richieste WhatsApp/email.
- * Version: 1.1.0
+ * Description: Gestione veicoli a noleggio con catalogo frontend, disponibilita e contatti WhatsApp Business/email.
+ * Version: 1.0.1
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Francesco Frattomella
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GWR_VERSION', '1.1.0' );
+define( 'GWR_VERSION', '1.0.1' );
 define( 'GWR_PLUGIN_FILE', __FILE__ );
 define( 'GWR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'GWR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -50,6 +50,7 @@ require_once GWR_PLUGIN_DIR . 'includes/class-gwr-admin.php';
 require_once GWR_PLUGIN_DIR . 'includes/class-gwr-frontend.php';
 require_once GWR_PLUGIN_DIR . 'includes/class-gwr-blocks.php';
 require_once GWR_PLUGIN_DIR . 'includes/class-gwr-core.php';
+require_once GWR_PLUGIN_DIR . 'includes/class-gwr-plugin.php';
 
 /**
  * Boot the plugin.

@@ -38,6 +38,10 @@ class GWR_Admin {
 			'primary_color'       => '#113a7d',
 			'accent_color'        => '#37a83a',
 			'button_label'        => __( 'Richiedi disponibilita', 'gest-web-rent' ),
+			'whatsapp_message'    => 'Ciao, vorrei informazioni sul noleggio del veicolo {vehicle_title}. Date di interesse: {start_date} - {end_date}. Link: {vehicle_url}',
+			'email_subject'       => 'Richiesta noleggio: {vehicle_title}',
+			'email_body'          => "Ciao,\nvorrei informazioni sul noleggio del veicolo {vehicle_title}.\nDate di interesse: {start_date} - {end_date}.\nLink: {vehicle_url}",
+			'privacy_note'        => __( 'La disponibilita mostrata e indicativa e deve essere confermata dal concessionario.', 'gest-web-rent' ),
 			'github_access_token' => '',
 		);
 	}
@@ -68,7 +72,7 @@ class GWR_Admin {
 		add_submenu_page( 'gest-web-rent', __( 'Veicoli', 'gest-web-rent' ), __( 'Veicoli', 'gest-web-rent' ), 'edit_posts', 'edit.php?post_type=' . GWR_CPT::POST_TYPE );
 		add_submenu_page( 'gest-web-rent', __( 'Aggiungi veicolo', 'gest-web-rent' ), __( 'Aggiungi veicolo', 'gest-web-rent' ), 'edit_posts', 'post-new.php?post_type=' . GWR_CPT::POST_TYPE );
 		add_submenu_page( 'gest-web-rent', __( 'Disponibilita', 'gest-web-rent' ), __( 'Disponibilita', 'gest-web-rent' ), 'edit_posts', 'gwr-availability', array( __CLASS__, 'availability_page' ) );
-		add_submenu_page( 'gest-web-rent', __( 'Configurazione', 'gest-web-rent' ), __( 'Configurazione', 'gest-web-rent' ), 'manage_options', 'gwr-settings', array( __CLASS__, 'settings_page' ) );
+		add_submenu_page( 'gest-web-rent', __( 'Impostazioni', 'gest-web-rent' ), __( 'Impostazioni', 'gest-web-rent' ), 'manage_options', 'gwr-settings', array( __CLASS__, 'settings_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Guida rapida', 'gest-web-rent' ), __( 'Guida rapida', 'gest-web-rent' ), 'manage_options', 'gwr-guide', array( __CLASS__, 'guide_page' ) );
 	}
 
@@ -136,6 +140,10 @@ class GWR_Admin {
 			'primary_color'       => isset( $input['primary_color'] ) ? sanitize_hex_color( wp_unslash( $input['primary_color'] ) ) : '#113a7d',
 			'accent_color'        => isset( $input['accent_color'] ) ? sanitize_hex_color( wp_unslash( $input['accent_color'] ) ) : '#37a83a',
 			'button_label'        => isset( $input['button_label'] ) ? sanitize_text_field( wp_unslash( $input['button_label'] ) ) : '',
+			'whatsapp_message'    => isset( $input['whatsapp_message'] ) ? sanitize_textarea_field( wp_unslash( $input['whatsapp_message'] ) ) : '',
+			'email_subject'       => isset( $input['email_subject'] ) ? sanitize_text_field( wp_unslash( $input['email_subject'] ) ) : '',
+			'email_body'          => isset( $input['email_body'] ) ? sanitize_textarea_field( wp_unslash( $input['email_body'] ) ) : '',
+			'privacy_note'        => isset( $input['privacy_note'] ) ? sanitize_textarea_field( wp_unslash( $input['privacy_note'] ) ) : '',
 			'github_access_token' => isset( $existing['github_access_token'] ) ? $existing['github_access_token'] : '',
 		);
 
@@ -208,6 +216,7 @@ class GWR_Admin {
 		echo '</section>';
 		echo '</div>';
 
+		self::render_dashboard_settings_form( $settings );
 		self::render_upcoming_panel( $upcoming );
 		self::render_page_end();
 	}
@@ -244,7 +253,7 @@ class GWR_Admin {
 
 		self::render_page_start(
 			'settings',
-			__( 'Configurazione Gest Web Rent', 'gest-web-rent' ),
+			__( 'Impostazioni Gest Web Rent', 'gest-web-rent' ),
 			__( 'Imposta identita concessionario, box contatto, colori principali e aggiornamenti GitHub. Il token non viene mai mostrato nel frontend.', 'gest-web-rent' ),
 			array()
 		);
@@ -267,6 +276,15 @@ class GWR_Admin {
 		self::setting_field( 'primary_color', __( 'Colore primario', 'gest-web-rent' ), $settings['primary_color'], 'color' );
 		self::setting_field( 'accent_color', __( 'Colore accento', 'gest-web-rent' ), $settings['accent_color'], 'color' );
 		self::setting_field( 'button_label', __( 'Etichetta CTA', 'gest-web-rent' ), $settings['button_label'], 'text', __( 'Richiedi disponibilita', 'gest-web-rent' ) );
+		self::setting_textarea( 'privacy_note', __( 'Testo privacy / nota contatto', 'gest-web-rent' ), $settings['privacy_note'] );
+		echo '</div></div></details>';
+
+		echo '<details class="gwr-admin-accordion" open>';
+		echo '<summary class="gwr-admin-accordion__summary"><div class="gwr-admin-accordion__copy"><h2>' . esc_html__( 'Messaggi predefiniti', 'gest-web-rent' ) . '</h2><p>' . esc_html__( 'Placeholder disponibili: {vehicle_title}, {brand}, {model}, {version}, {daily_price}, {weekly_price}, {monthly_price}, {start_date}, {end_date}, {vehicle_url}, {site_name}.', 'gest-web-rent' ) . '</p></div></summary>';
+		echo '<div class="gwr-admin-accordion__content"><div class="gwr-field-grid">';
+		self::setting_textarea( 'whatsapp_message', __( 'Messaggio WhatsApp predefinito', 'gest-web-rent' ), $settings['whatsapp_message'] );
+		self::setting_field( 'email_subject', __( 'Oggetto email predefinito', 'gest-web-rent' ), $settings['email_subject'], 'text' );
+		self::setting_textarea( 'email_body', __( 'Corpo email predefinito', 'gest-web-rent' ), $settings['email_body'] );
 		echo '</div></div></details>';
 
 		echo '<details class="gwr-admin-accordion">';
@@ -296,10 +314,10 @@ class GWR_Admin {
 		);
 
 		echo '<div class="gwr-surface-grid">';
-		self::guide_card( __( 'Catalogo veicoli', 'gest-web-rent' ), '[gest_web_rent_catalog]', __( 'Mostra card veicoli con filtri per date, marca, posti e prezzo.', 'gest-web-rent' ) );
-		self::guide_card( __( 'Calendario disponibilita', 'gest-web-rent' ), '[gest_web_rent_availability]', __( 'Permette al visitatore di scegliere un periodo e vedere i veicoli disponibili.', 'gest-web-rent' ) );
-		self::guide_card( __( 'Scheda veicolo', 'gest-web-rent' ), '[gest_web_rent_vehicle id="123"]', __( 'Mostra foto, dettagli noleggio, limiti chilometrici e box contatto.', 'gest-web-rent' ) );
-		self::guide_card( __( 'Aggiornamenti', 'gest-web-rent' ), 'v1.1.0 -> v1.1.1', __( 'Aggiorna Version, GWR_VERSION, stable tag e changelog prima di creare un tag GitHub.', 'gest-web-rent' ) );
+		self::guide_card( __( 'Catalogo veicoli', 'gest-web-rent' ), '[gwr_catalog]', __( 'Mostra card veicoli con filtri per date, marca, posti e prezzo. Alias: [gest_web_rent_catalog].', 'gest-web-rent' ) );
+		self::guide_card( __( 'Calendario disponibilita', 'gest-web-rent' ), '[gwr_availability_calendar]', __( 'Permette al visitatore di scegliere un periodo e vedere i veicoli disponibili.', 'gest-web-rent' ) );
+		self::guide_card( __( 'Scheda veicolo', 'gest-web-rent' ), '[gwr_vehicle id="123"]', __( 'Mostra foto, dettagli noleggio, limiti chilometrici e box contatto. Alias: [gest_web_rent_vehicle].', 'gest-web-rent' ) );
+		self::guide_card( __( 'Aggiornamenti', 'gest-web-rent' ), 'v1.0.1 -> v1.0.2', __( 'Aggiorna Version, GWR_VERSION, stable tag e changelog prima di creare un tag GitHub.', 'gest-web-rent' ) );
 		echo '</div>';
 
 		self::render_page_end();
@@ -365,7 +383,7 @@ class GWR_Admin {
 			'dashboard'    => array( 'label' => __( 'Dashboard', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gest-web-rent' ) ),
 			'vehicles'     => array( 'label' => __( 'Veicoli', 'gest-web-rent' ), 'url' => admin_url( 'edit.php?post_type=' . GWR_CPT::POST_TYPE ) ),
 			'availability' => array( 'label' => __( 'Disponibilita', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-availability' ) ),
-			'settings'     => array( 'label' => __( 'Configurazione', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-settings' ) ),
+			'settings'     => array( 'label' => __( 'Impostazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-settings' ) ),
 			'guide'        => array( 'label' => __( 'Guida', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-guide' ) ),
 		);
 
@@ -433,6 +451,36 @@ class GWR_Admin {
 	}
 
 	/**
+	 * Render dashboard settings card.
+	 *
+	 * @param array $settings Settings.
+	 * @return void
+	 */
+	private static function render_dashboard_settings_form( $settings ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		echo '<section class="gwr-data-grid-card">';
+		echo '<div class="gwr-data-grid-card__head"><div><h2>' . esc_html__( 'Configurazione rapida contatti', 'gest-web-rent' ) . '</h2><p>' . esc_html__( 'Gli stessi campi sono disponibili anche in Impostazioni. Salvati con nonce WordPress, capability manage_options e sanitizzazione dedicata.', 'gest-web-rent' ) . '</p></div></div>';
+		echo '<form method="post" action="options.php" class="gwr-settings-form">';
+		settings_fields( 'gwr_settings_group' );
+		echo '<div class="gwr-field-grid">';
+		self::setting_field( 'dealer_name', __( 'Nome concessionario', 'gest-web-rent' ), $settings['dealer_name'], 'text', __( 'Gest Web Rent', 'gest-web-rent' ) );
+		self::setting_field( 'whatsapp_number', __( 'Numero WhatsApp Business', 'gest-web-rent' ), $settings['whatsapp_number'], 'text', '393331234567' );
+		self::setting_field( 'contact_email', __( 'Email richieste noleggio', 'gest-web-rent' ), $settings['contact_email'], 'email', 'noleggio@example.com' );
+		self::setting_textarea( 'whatsapp_message', __( 'Messaggio WhatsApp predefinito', 'gest-web-rent' ), $settings['whatsapp_message'] );
+		self::setting_field( 'email_subject', __( 'Oggetto email predefinito', 'gest-web-rent' ), $settings['email_subject'], 'text' );
+		self::setting_textarea( 'email_body', __( 'Corpo email predefinito', 'gest-web-rent' ), $settings['email_body'] );
+		self::setting_field( 'primary_color', __( 'Colore primario', 'gest-web-rent' ), $settings['primary_color'], 'color' );
+		self::setting_textarea( 'privacy_note', __( 'Testo privacy / nota contatto', 'gest-web-rent' ), $settings['privacy_note'] );
+		self::github_token_field( $settings );
+		echo '</div><div class="gwr-form-submit">';
+		submit_button( __( 'Salva impostazioni', 'gest-web-rent' ), 'primary', 'submit', false );
+		echo '</div></form></section>';
+	}
+
+	/**
 	 * Render settings field.
 	 *
 	 * @param string $key Key.
@@ -446,6 +494,21 @@ class GWR_Admin {
 		echo '<label class="gwr-field" for="gwr_setting_' . esc_attr( $key ) . '">';
 		echo '<span class="gwr-field__label">' . esc_html( $label ) . '</span>';
 		echo '<input type="' . esc_attr( $type ) . '" id="gwr_setting_' . esc_attr( $key ) . '" name="' . esc_attr( self::OPTION_NAME ) . '[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '" placeholder="' . esc_attr( $placeholder ) . '" />';
+		echo '</label>';
+	}
+
+	/**
+	 * Render settings textarea.
+	 *
+	 * @param string $key Key.
+	 * @param string $label Label.
+	 * @param string $value Value.
+	 * @return void
+	 */
+	private static function setting_textarea( $key, $label, $value ) {
+		echo '<label class="gwr-field gwr-field--wide" for="gwr_setting_' . esc_attr( $key ) . '">';
+		echo '<span class="gwr-field__label">' . esc_html( $label ) . '</span>';
+		echo '<textarea id="gwr_setting_' . esc_attr( $key ) . '" name="' . esc_attr( self::OPTION_NAME ) . '[' . esc_attr( $key ) . ']" rows="4">' . esc_textarea( $value ) . '</textarea>';
 		echo '</label>';
 	}
 

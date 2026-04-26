@@ -147,7 +147,7 @@ class GWR_Blocks {
 		$filters = ! empty( $attributes['filters'] ) ? 'yes' : 'no';
 		$title   = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : __( 'Veicoli a noleggio', 'gest-web-rent' );
 
-		return do_shortcode( '[gest_web_rent_catalog limit="' . $limit . '" columns="' . $columns . '" filters="' . esc_attr( $filters ) . '" title="' . esc_attr( $title ) . '"]' );
+		return do_shortcode( '[gwr_catalog limit="' . $limit . '" columns="' . $columns . '" filters="' . esc_attr( $filters ) . '" title="' . esc_attr( $title ) . '"]' );
 	}
 
 	/**
@@ -160,7 +160,7 @@ class GWR_Blocks {
 		$columns = isset( $attributes['columns'] ) ? absint( $attributes['columns'] ) : 3;
 		$title   = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : __( 'Verifica disponibilita', 'gest-web-rent' );
 
-		return do_shortcode( '[gest_web_rent_availability columns="' . $columns . '" title="' . esc_attr( $title ) . '"]' );
+		return do_shortcode( '[gwr_availability_calendar columns="' . $columns . '" title="' . esc_attr( $title ) . '"]' );
 	}
 
 	/**
@@ -190,6 +190,6 @@ class GWR_Blocks {
 			$vehicle_id = ! empty( $query->posts ) ? (int) $query->posts[0] : 0;
 		}
 
-		return $vehicle_id ? do_shortcode( '[gest_web_rent_vehicle id="' . absint( $vehicle_id ) . '"]' ) : '<div class="gwr-empty-state">' . esc_html__( 'Aggiungi almeno un veicolo per vedere l anteprima.', 'gest-web-rent' ) . '</div>';
+		return $vehicle_id ? do_shortcode( '[gwr_vehicle id="' . absint( $vehicle_id ) . '"]' ) : '<div class="gwr-empty-state">' . esc_html__( 'Aggiungi almeno un veicolo per vedere l anteprima.', 'gest-web-rent' ) . '</div>';
 	}
 }

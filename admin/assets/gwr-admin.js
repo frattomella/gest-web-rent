@@ -2,11 +2,12 @@
   function rowTemplate(index) {
     return [
       '<div class="gwr-availability-row" data-gwr-availability-row>',
-      '<label><span>Da</span><input type="date" name="gwr_availability[' + index + '][date_from]" value="" /></label>',
-      '<label><span>A</span><input type="date" name="gwr_availability[' + index + '][date_to]" value="" /></label>',
-      '<label><span>Stato</span><select name="gwr_availability[' + index + '][status]"><option value="booked">Impegnato</option><option value="maintenance">Manutenzione</option><option value="unavailable">Non disponibile</option></select></label>',
-      '<label><span>Riferimento</span><input type="text" name="gwr_availability[' + index + '][label]" value="" placeholder="Cliente, pratica, motivo" /></label>',
-      '<label class="gwr-availability-row__note"><span>Note</span><input type="text" name="gwr_availability[' + index + '][note]" value="" /></label>',
+      '<label><span>Data inizio</span><input type="date" name="gwr_availability[' + index + '][start_date]" value="" /></label>',
+      '<label><span>Data fine</span><input type="date" name="gwr_availability[' + index + '][end_date]" value="" /></label>',
+      '<input type="hidden" name="gwr_availability[' + index + '][id]" value="0" />',
+      '<label><span>Stato</span><select name="gwr_availability[' + index + '][status]"><option value="occupied">Occupato</option><option value="maintenance">Manutenzione</option><option value="reserved">Riservato</option><option value="unavailable">Non disponibile</option></select></label>',
+      '<label><span>Riferimento esterno</span><input type="text" name="gwr_availability[' + index + '][external_reference]" value="" placeholder="Pratica, contratto, cliente" /></label>',
+      '<label class="gwr-availability-row__note"><span>Nota interna</span><input type="text" name="gwr_availability[' + index + '][internal_note]" value="" /></label>',
       '<button type="button" class="button-link-delete" data-gwr-remove-availability>Rimuovi</button>',
       '</div>'
     ].join('');

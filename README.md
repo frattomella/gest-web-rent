@@ -13,28 +13,57 @@ Gest Web Rent e un plugin WordPress per concessionari e rent company: gestisce v
 
 1. Carica la cartella `gest-web-rent` in `wp-content/plugins/`.
 2. Attiva il plugin da **Plugin > Plugin installati**.
-3. Vai in **Gest Web Rent > Configurazione** e configura WhatsApp Business/email.
+3. Vai in **Gest Web Rent > Impostazioni** e configura WhatsApp Business/email.
 4. Crea i veicoli dal menu **Gest Web Rent > Veicoli**.
 5. Inserisci in una pagina il blocco **Gest Web Rent - Catalogo veicoli** oppure lo shortcode.
 
 ## Installazione da ZIP
 
-1. Scarica `gest-web-rent.zip` dalla release GitHub.
-2. In WordPress apri **Plugin > Aggiungi nuovo > Carica plugin**.
-3. Seleziona lo ZIP e installa.
-4. Attiva il plugin.
+1. Non scaricare lo ZIP automatico del branch GitHub, perche GitHub crea cartelle tipo `gest-web-rent-main`.
+2. Scarica invece `gest-web-rent.zip` dalla sezione GitHub Releases.
+3. In alternativa genera lo ZIP localmente con `bash scripts/build-zip.sh`.
+4. In WordPress apri **Plugin > Aggiungi nuovo > Carica plugin**.
+5. Seleziona `build/gest-web-rent.zip` oppure lo ZIP della release.
+6. Installa e attiva il plugin.
 
-Lo ZIP deve contenere la cartella principale `gest-web-rent/`, non soltanto i file sciolti.
+Lo ZIP corretto deve contenere:
+
+```text
+gest-web-rent/
+  gest-web-rent.php
+```
+
+Non deve contenere `gest-web-rent-main/` o cartelle generate automaticamente da GitHub.
+
+## Build ZIP locale
+
+```bash
+bash scripts/build-zip.sh
+```
+
+Output:
+
+```text
+build/gest-web-rent.zip
+```
+
+Verifica:
+
+```bash
+unzip -l build/gest-web-rent.zip | head
+```
+
+Deve apparire `gest-web-rent/gest-web-rent.php`.
 
 ## Configurazione WhatsApp Business
 
-In **Gest Web Rent > Configurazione** inserisci il numero WhatsApp Business in formato internazionale, per esempio `+393331234567`.
+In **Gest Web Rent > Impostazioni** inserisci il numero WhatsApp Business in formato internazionale, per esempio `+393331234567`.
 
 Nel frontend il plugin genera link `wa.me` con un messaggio precompilato riferito al veicolo selezionato.
 
 ## Configurazione email
 
-In **Gest Web Rent > Configurazione** inserisci l'indirizzo email che deve ricevere le richieste di noleggio.
+In **Gest Web Rent > Impostazioni** inserisci l'indirizzo email che deve ricevere le richieste di noleggio.
 
 Il catalogo e la scheda veicolo generano un link `mailto:` con oggetto precompilato.
 
@@ -43,24 +72,31 @@ Il catalogo e la scheda veicolo generano un link `mailto:` con oggetto precompil
 Catalogo veicoli:
 
 ```text
-[gest_web_rent_catalog]
+[gwr_catalog]
 ```
 
 Catalogo con limite:
 
 ```text
-[gest_web_rent_catalog limit="6"]
+[gwr_catalog limit="6"]
 ```
 
 Calendario disponibilita:
 
 ```text
-[gest_web_rent_availability]
+[gwr_availability_calendar]
 ```
 
 Scheda singolo veicolo:
 
 ```text
+[gwr_vehicle id="123"]
+```
+
+Alias compatibili:
+
+```text
+[gest_web_rent_catalog]
 [gest_web_rent_vehicle id="123"]
 ```
 
@@ -102,11 +138,12 @@ Dal menu **Gest Web Rent** puoi creare veicoli come contenuti WordPress. Ogni ve
 
 Ogni veicolo ha una metabox **Disponibilita e impegni** dove inserire periodi:
 
-- impegnato;
+- occupato;
 - manutenzione;
+- riservato;
 - non disponibile.
 
-Il catalogo e il calendario frontend confrontano le date richieste con questi periodi e mostrano solo i veicoli liberi. Gli aggiornamenti del plugin non cancellano questi dati perche sono salvati nel database WordPress come contenuti e metadati.
+Il catalogo e il calendario frontend confrontano le date richieste con questi periodi e mostrano solo i veicoli liberi. Gli aggiornamenti del plugin non cancellano questi dati perche sono salvati nella tabella WordPress `wp_gwr_availability`.
 
 ## Aggiornamenti da GitHub
 
@@ -126,7 +163,7 @@ Funzionamento:
 - scarica preferibilmente l'asset `gest-web-rent.zip`;
 - mantiene la cartella plugin `gest-web-rent`.
 
-Per repository pubbliche non serve token. Per repository private puoi inserire un **GitHub Access Token** in **Gest Web Rent > Configurazione**. Il token non viene mai mostrato nel frontend ed e usato solo lato admin/server.
+Per repository pubbliche non serve token. Per repository private puoi inserire un **GitHub Access Token** in **Gest Web Rent > Impostazioni**. Il token non viene mai mostrato nel frontend ed e usato solo lato admin/server.
 
 ## Versionamento
 
@@ -140,8 +177,8 @@ Ogni release deve aggiornare:
 Esempio release corrente:
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
 Il workflow GitHub Actions crea automaticamente una release e allega `gest-web-rent.zip`.

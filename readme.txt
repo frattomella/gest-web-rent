@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,9 +31,9 @@ Funzionalita principali:
 
 1. Carica la cartella `gest-web-rent` in `wp-content/plugins/` oppure installa lo ZIP della release.
 2. Attiva il plugin dalla schermata Plugin.
-3. Configura WhatsApp Business ed email in **Gest Web Rent > Configurazione**.
+3. Configura WhatsApp Business ed email in **Gest Web Rent > Impostazioni**.
 4. Crea i veicoli dal menu **Gest Web Rent**.
-5. Inserisci lo shortcode `[gest_web_rent_catalog]` in una pagina.
+5. Inserisci lo shortcode `[gwr_catalog]` in una pagina.
 
 == Frequently Asked Questions ==
 
@@ -47,18 +47,16 @@ No. Veicoli, metadati e impostazioni sono salvati nel database WordPress e non v
 
 = Quali shortcode sono disponibili? =
 
-Usa `[gest_web_rent_catalog]` per il catalogo, `[gest_web_rent_availability]` per il calendario disponibilita e `[gest_web_rent_vehicle id="123"]` per una singola scheda veicolo.
+Usa `[gwr_catalog]` per il catalogo, `[gwr_availability_calendar vehicle_id="123"]` per il calendario disponibilita e `[gwr_vehicle id="123"]` per una singola scheda veicolo. Restano disponibili gli alias `[gest_web_rent_catalog]`, `[gest_web_rent_availability]` e `[gest_web_rent_vehicle]`.
 
 == Changelog ==
 
-= 1.1.0 =
-* Plugin rifatto su base operativa simile a GestPark Online.
-* Dashboard amministrativa con KPI, configurazione e guida componenti.
-* Scheda veicolo completa per noleggio.
-* Gestione periodi di disponibilita/impegno per ogni veicolo.
-* Catalogo frontend con filtri disponibilita.
-* Calendario disponibilita frontend.
-* Blocchi Gutenberg dinamici.
+= 1.0.1 =
+* Corretto packaging ZIP per installazione WordPress.
+* Lo ZIP ora contiene la cartella corretta `gest-web-rent`.
+* Aggiunta validazione del file principale nel workflow release.
+* Aggiunto script locale `scripts/build-zip.sh`.
+* Disponibilita veicoli salvata in tabella custom `wp_gwr_availability`.
 
 = 1.0.0 =
 * Prima versione stabile.

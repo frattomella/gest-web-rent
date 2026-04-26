@@ -26,7 +26,8 @@
 .gwr-card-actions,
 .gwr-filter-actions,
 .gwr-card-topline,
-.gwr-contact-actions {
+.gwr-contact-actions,
+.gwr-contact-dates {
 	align-items: center;
 	display: flex;
 }
@@ -428,6 +429,27 @@
 .gwr-contact-actions {
 	flex-wrap: wrap;
 	gap: 10px;
+}
+
+.gwr-contact-dates {
+	align-items: end;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.gwr-contact-dates label {
+	display: grid;
+	flex: 1 1 140px;
+	font-size: .82rem;
+	font-weight: 800;
+	gap: 6px;
+}
+
+.gwr-contact-dates input {
+	border: 1px solid #d1d5db;
+	border-radius: 12px;
+	min-height: 42px;
+	padding: 0 12px;
 }
 
 .gwr-single-layout {

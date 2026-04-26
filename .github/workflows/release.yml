@@ -25,7 +25,9 @@ jobs:
 
       - name: Prepare plugin folder
         run: |
+          rm -rf build
           mkdir -p build/gest-web-rent
+
           rsync -av \
             --exclude='.git' \
             --exclude='.github' \
@@ -33,7 +35,7 @@ jobs:
             --exclude='.gitignore' \
             --exclude='.gitkeep' \
             --exclude='build' \
-            --exclude='/assets' \
+            --exclude='scripts' \
             --exclude='node_modules' \
             --exclude='vendor' \
             --exclude='.env' \
@@ -44,10 +46,24 @@ jobs:
             --exclude='*.tmp' \
             ./ build/gest-web-rent/
 
+      - name: Validate plugin main file exists
+        run: |
+          test -f build/gest-web-rent/gest-web-rent.php
+
+      - name: Validate plugin header
+        run: |
+          grep -q "Plugin Name: Gest Web Rent" build/gest-web-rent/gest-web-rent.php
+
       - name: Create ZIP
         run: |
           cd build
           zip -r gest-web-rent.zip gest-web-rent
+
+      - name: Validate ZIP structure
+        run: |
+          unzip -l build/gest-web-rent.zip
+          unzip -l build/gest-web-rent.zip | grep "gest-web-rent/gest-web-rent.php"
+          ! unzip -l build/gest-web-rent.zip | grep -E "gest-web-rent-main|frattomella-gest-web-rent|gest-web-rent-[0-9]"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
