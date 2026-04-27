@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.2
+Stable tag: 1.1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,12 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 1.1.3 =
+* Allineato controllo aggiornamenti GitHub al comportamento di GestPark Online.
+* Aggiunta cache release dedicata `gwr_github_release_payload`.
+* Aggiunto pulsante dashboard per forzare refresh GitHub e WordPress update cache.
+* Migliorata compatibilita con asset release `gest-web-rent.zip`.
 
 = 1.1.2 =
 * Aggiunto pulsante dashboard per forzare il controllo aggiornamenti GitHub.

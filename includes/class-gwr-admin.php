@@ -28,6 +28,7 @@ class GWR_Admin {
 		add_action( 'admin_post_gwr_save_availability', array( __CLASS__, 'handle_save_availability' ) );
 		add_action( 'admin_post_gwr_delete_availability', array( __CLASS__, 'handle_delete_availability' ) );
 		add_action( 'admin_post_gwr_force_update_check', array( __CLASS__, 'handle_force_update_check' ) );
+		add_action( 'admin_post_gwr_github_refresh', array( __CLASS__, 'handle_github_refresh' ) );
 	}
 
 	/**
@@ -150,7 +151,13 @@ class GWR_Admin {
 			$output['github_access_token'] = sanitize_text_field( $input['github_access_token'] );
 		}
 
-		delete_site_transient( 'gwr_github_release' );
+		if ( class_exists( 'GWR_GitHub_Updater' ) ) {
+			GWR_GitHub_Updater::clear_cache();
+		} else {
+			delete_site_transient( 'gwr_github_release_payload' );
+			delete_site_transient( 'gwr_github_release' );
+			delete_site_transient( 'update_plugins' );
+		}
 
 		return array_replace_recursive( self::default_settings(), $output );
 	}
@@ -163,6 +170,9 @@ class GWR_Admin {
 	public static function dashboard_page() {
 		$counts = GWR_CPT::counts();
 		$settings = self::get_settings();
+		$github_summary = class_exists( 'GWR_GitHub_Updater' ) ? GWR_GitHub_Updater::summary() : array();
+		$github_release = class_exists( 'GWR_GitHub_Updater' ) ? GWR_GitHub_Updater::latest_release() : null;
+		$github_error = is_wp_error( $github_release ) ? $github_release->get_error_message() : ( class_exists( 'GWR_GitHub_Updater' ) ? GWR_GitHub_Updater::last_error() : '' );
 
 		self::page_start(
 			'dashboard',
@@ -194,9 +204,18 @@ class GWR_Admin {
 		echo '<section class="gwr-surface"><span class="gwr-surface__eyebrow">' . esc_html__( 'GitHub', 'gest-web-rent' ) . '</span><h2>' . esc_html__( 'Aggiornamenti GitHub', 'gest-web-rent' ) . '</h2>';
 		echo '<p>' . esc_html__( 'Forza il controllo delle release GitHub e aggiorna la cache aggiornamenti di WordPress.', 'gest-web-rent' ) . '</p>';
 		echo '<p><strong>' . esc_html__( 'Versione installata:', 'gest-web-rent' ) . '</strong> ' . esc_html( GWR_VERSION ) . '</p>';
-		echo '<p><strong>' . esc_html__( 'Repository:', 'gest-web-rent' ) . '</strong> <code>frattomella/gest-web-rent</code></p>';
+		echo '<p><strong>' . esc_html__( 'Repository:', 'gest-web-rent' ) . '</strong> <a href="' . esc_url( $github_summary['repository_url'] ?? 'https://github.com/frattomella/gest-web-rent' ) . '" target="_blank" rel="noopener noreferrer"><code>' . esc_html( $github_summary['repository'] ?? 'frattomella/gest-web-rent' ) . '</code></a></p>';
+		echo '<p><strong>' . esc_html__( 'Asset release atteso:', 'gest-web-rent' ) . '</strong> <code>' . esc_html( $github_summary['asset_name'] ?? 'gest-web-rent.zip' ) . '</code></p>';
+		echo '<p><strong>' . esc_html__( 'Token GitHub:', 'gest-web-rent' ) . '</strong> ' . esc_html( ! empty( $github_summary['has_token'] ) ? __( 'Configurato', 'gest-web-rent' ) : __( 'Non configurato', 'gest-web-rent' ) ) . '</p>';
+		if ( is_array( $github_release ) ) {
+			echo '<p><strong>' . esc_html__( 'Latest release rilevata:', 'gest-web-rent' ) . '</strong> ' . esc_html( $github_release['tag'] ?? '-' ) . ' <span class="gwr-muted">(' . esc_html( $github_release['version'] ?? '-' ) . ')</span></p>';
+			echo '<p><strong>' . esc_html__( 'Package URL:', 'gest-web-rent' ) . '</strong> ' . esc_html( ! empty( $github_release['package_url'] ) ? __( 'Disponibile', 'gest-web-rent' ) : __( 'Vuoto', 'gest-web-rent' ) ) . '</p>';
+		}
+		if ( $github_error ) {
+			echo '<p><strong>' . esc_html__( 'Errore GitHub:', 'gest-web-rent' ) . '</strong> ' . esc_html( $github_error ) . '</p>';
+		}
 		echo '<div class="gwr-inline-actions">';
-		echo '<a class="button button-primary" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=gwr_force_update_check' ), 'gwr_force_update_check' ) ) . '">' . esc_html__( 'Controlla aggiornamenti GitHub', 'gest-web-rent' ) . '</a>';
+		echo '<a class="button button-primary" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=gwr_github_refresh' ), 'gwr_github_refresh' ) ) . '">' . esc_html__( 'Controlla aggiornamenti GitHub', 'gest-web-rent' ) . '</a>';
 		echo '<a class="button button-secondary" href="' . esc_url( admin_url( 'plugins.php' ) ) . '">' . esc_html__( 'Vai alla pagina Plugin', 'gest-web-rent' ) . '</a>';
 		echo '</div></section>';
 		echo '</div>';
@@ -434,22 +453,36 @@ class GWR_Admin {
 		self::require_admin_capability();
 		check_admin_referer( 'gwr_force_update_check' );
 
-		delete_site_transient( 'gwr_github_release' );
-		delete_site_transient( 'update_plugins' );
-
-		if ( ! function_exists( 'wp_update_plugins' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/update.php';
-		}
-
-		if ( function_exists( 'wp_update_plugins' ) ) {
-			wp_update_plugins();
-		}
+		self::refresh_github_update_cache();
 
 		wp_safe_redirect(
 			add_query_arg(
 				array(
 					'page'        => 'gest-web-rent',
-					'gwr_message' => 'updates_checked',
+					'gwr_message' => 'github_refreshed',
+				),
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
+	}
+
+	/**
+	 * Handle GitHub updater refresh from dashboard.
+	 *
+	 * @return void
+	 */
+	public static function handle_github_refresh() {
+		self::require_admin_capability();
+		check_admin_referer( 'gwr_github_refresh' );
+
+		self::refresh_github_update_cache();
+
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page'        => 'gest-web-rent',
+					'gwr_message' => 'github_refreshed',
 				),
 				admin_url( 'admin.php' )
 			)
@@ -942,12 +975,37 @@ class GWR_Admin {
 
 		$type = isset( $_GET['gwr_notice'] ) && 'error' === $_GET['gwr_notice'] ? 'notice-error' : 'notice-success';
 		$message = sanitize_text_field( wp_unslash( $_GET['gwr_message'] ) );
+		$message_key = sanitize_key( $message );
 
-		if ( 'updates_checked' === $message ) {
-			$message = __( 'Controllo aggiornamenti GitHub completato. Se esiste una release piu recente, l\'aggiornamento sara visibile nella pagina Plugin.', 'gest-web-rent' );
+		if ( 'updates_checked' === $message_key || 'github_refreshed' === $message_key ) {
+			$message = __( 'Controllo aggiornamenti GitHub completato. Se esiste una release piu recente, l\'aggiornamento sara disponibile nella pagina Plugin.', 'gest-web-rent' );
 		}
 
 		echo '<div class="notice ' . esc_attr( $type ) . ' inline is-dismissible"><p>' . esc_html( $message ) . '</p></div>';
+	}
+
+	/**
+	 * Refresh GitHub release cache and WordPress plugin updates cache.
+	 *
+	 * @return void
+	 */
+	private static function refresh_github_update_cache() {
+		if ( class_exists( 'GWR_GitHub_Updater' ) ) {
+			GWR_GitHub_Updater::clear_cache();
+			GWR_GitHub_Updater::latest_release( true );
+		} else {
+			delete_site_transient( 'gwr_github_release_payload' );
+			delete_site_transient( 'gwr_github_release' );
+			delete_site_transient( 'update_plugins' );
+		}
+
+		if ( ! function_exists( 'wp_update_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/update.php';
+		}
+
+		if ( function_exists( 'wp_update_plugins' ) ) {
+			wp_update_plugins();
+		}
 	}
 
 	/**

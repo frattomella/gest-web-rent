@@ -8,78 +8,265 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Lightweight updater that exposes GitHub Releases to WordPress core updates.
+ * Expose GitHub Releases to the native WordPress plugin updater.
  */
 class GWR_GitHub_Updater {
-	const OWNER          = 'frattomella';
-	const REPO           = 'gest-web-rent';
-	const SLUG           = 'gest-web-rent';
-	const OPTION_NAME    = 'gwr_settings';
-	const TRANSIENT_NAME = 'gwr_github_release';
+	const OWNER             = 'frattomella';
+	const REPO              = 'gest-web-rent';
+	const SLUG              = 'gest-web-rent';
+	const OPTION_NAME       = 'gwr_settings';
+	const TRANSIENT_NAME    = 'gwr_github_release';
+	const RELEASE_TRANSIENT = 'gwr_github_release_payload';
+	const RELEASE_TTL       = 900;
+	const ERROR_TRANSIENT   = 'gwr_github_release_error';
 
 	/**
-	 * Absolute plugin file.
+	 * Avoid registering filters more than once.
 	 *
-	 * @var string
+	 * @var bool
 	 */
-	private $plugin_file;
+	private static $initialized = false;
 
 	/**
-	 * Plugin basename, e.g. gest-web-rent/gest-web-rent.php.
-	 *
-	 * @var string
-	 */
-	private $plugin_basename;
-
-	/**
-	 * Installed plugin version.
-	 *
-	 * @var string
-	 */
-	private $version;
-
-	/**
-	 * Constructor.
+	 * Backward-compatible constructor.
 	 *
 	 * @param string $plugin_file Absolute plugin file.
 	 * @param string $version Installed plugin version.
 	 */
-	public function __construct( $plugin_file, $version ) {
-		$this->plugin_file     = $plugin_file;
-		$this->plugin_basename = plugin_basename( $plugin_file );
-		$this->version         = $version;
-
-		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'check_for_update' ) );
-		add_filter( 'plugins_api', array( $this, 'plugin_information' ), 10, 3 );
-		add_filter( 'upgrader_source_selection', array( $this, 'fix_source_folder' ), 10, 4 );
-		add_filter( 'upgrader_pre_download', array( $this, 'download_private_package' ), 10, 4 );
+	public function __construct( $plugin_file = '', $version = '' ) {
+		self::init();
 	}
 
 	/**
-	 * Add update data to the WordPress update transient.
+	 * Register updater hooks.
+	 *
+	 * @return void
+	 */
+	public static function init() {
+		if ( self::$initialized ) {
+			return;
+		}
+
+		self::$initialized = true;
+
+		add_filter( 'pre_set_site_transient_update_plugins', array( __CLASS__, 'inject_update' ) );
+		add_filter( 'plugins_api', array( __CLASS__, 'plugin_info' ), 20, 3 );
+		add_filter( 'http_request_args', array( __CLASS__, 'filter_http_args' ), 20, 2 );
+		add_filter( 'upgrader_post_install', array( __CLASS__, 'fix_install_directory' ), 20, 3 );
+		add_action( 'upgrader_process_complete', array( __CLASS__, 'clear_cache_after_upgrade' ), 20, 2 );
+	}
+
+	/**
+	 * Clear GitHub and WordPress update caches.
+	 *
+	 * @return void
+	 */
+	public static function clear_cache() {
+		delete_site_transient( self::RELEASE_TRANSIENT );
+		delete_site_transient( self::TRANSIENT_NAME );
+		delete_site_transient( self::ERROR_TRANSIENT );
+		delete_site_transient( 'update_plugins' );
+	}
+
+	/**
+	 * Dashboard summary.
+	 *
+	 * @return array
+	 */
+	public static function summary() {
+		return array(
+			'enabled'        => true,
+			'repository'     => self::repository(),
+			'repository_url' => self::repository_url(),
+			'branch'         => 'main',
+			'asset_name'     => self::asset_name(),
+			'has_token'      => ! empty( self::token() ),
+		);
+	}
+
+	/**
+	 * Repository owner/name.
+	 *
+	 * @return string
+	 */
+	public static function repository() {
+		return self::OWNER . '/' . self::REPO;
+	}
+
+	/**
+	 * Expected release asset name.
+	 *
+	 * @return string
+	 */
+	public static function asset_name() {
+		return self::SLUG . '.zip';
+	}
+
+	/**
+	 * Current installed version.
+	 *
+	 * @return string
+	 */
+	public static function current_version() {
+		return ltrim( (string) GWR_VERSION, 'vV' );
+	}
+
+	/**
+	 * Plugin basename.
+	 *
+	 * @return string
+	 */
+	public static function plugin_file() {
+		return plugin_basename( GWR_PLUGIN_FILE );
+	}
+
+	/**
+	 * Plugin directory slug.
+	 *
+	 * @return string
+	 */
+	public static function plugin_slug() {
+		return dirname( plugin_basename( GWR_PLUGIN_FILE ) );
+	}
+
+	/**
+	 * Repository URL.
+	 *
+	 * @return string
+	 */
+	public static function repository_url() {
+		return 'https://github.com/' . self::repository();
+	}
+
+	/**
+	 * Optional GitHub token.
+	 *
+	 * @return string
+	 */
+	public static function token() {
+		$options = get_option( self::OPTION_NAME, array() );
+
+		if ( ! is_array( $options ) || empty( $options['github_access_token'] ) ) {
+			return '';
+		}
+
+		return trim( (string) $options['github_access_token'] );
+	}
+
+	/**
+	 * Last stored GitHub error for dashboard diagnostics.
+	 *
+	 * @return string
+	 */
+	public static function last_error() {
+		$error = get_site_transient( self::ERROR_TRANSIENT );
+		return is_string( $error ) ? $error : '';
+	}
+
+	/**
+	 * Retrieve and normalize the latest GitHub release.
+	 *
+	 * @param bool $force Ignore cache.
+	 * @return array|WP_Error
+	 */
+	public static function latest_release( $force = false ) {
+		if ( ! $force ) {
+			$cached = get_site_transient( self::RELEASE_TRANSIENT );
+			if ( is_array( $cached ) && ! empty( $cached['version'] ) ) {
+				return $cached;
+			}
+
+			$legacy = get_site_transient( self::TRANSIENT_NAME );
+			if ( is_array( $legacy ) ) {
+				$release = self::normalize_release_payload( $legacy );
+				if ( is_array( $release ) && ! empty( $release['version'] ) ) {
+					set_site_transient( self::RELEASE_TRANSIENT, $release, self::RELEASE_TTL );
+					return $release;
+				}
+			}
+		}
+
+		$response = wp_remote_get(
+			'https://api.github.com/repos/' . self::repository() . '/releases/latest',
+			array(
+				'timeout' => 15,
+				'headers' => self::api_headers( false ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			self::store_error( $response->get_error_message() );
+			return $response;
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		if ( $code < 200 || $code >= 300 ) {
+			$error = new WP_Error( 'gwr_github_http', sprintf( 'GitHub ha risposto con HTTP %d.', $code ) );
+			self::store_error( $error->get_error_message() );
+			return $error;
+		}
+
+		$payload = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		if ( ! is_array( $payload ) || empty( $payload['tag_name'] ) ) {
+			$error = new WP_Error( 'gwr_github_payload', 'Risposta GitHub non valida.' );
+			self::store_error( $error->get_error_message() );
+			return $error;
+		}
+
+		$release = self::normalize_release_payload( $payload );
+		if ( ! is_array( $release ) || empty( $release['version'] ) ) {
+			$error = new WP_Error( 'gwr_github_payload', 'Release GitHub non valida.' );
+			self::store_error( $error->get_error_message() );
+			return $error;
+		}
+
+		delete_site_transient( self::ERROR_TRANSIENT );
+		set_site_transient( self::RELEASE_TRANSIENT, $release, self::RELEASE_TTL );
+		set_site_transient( self::TRANSIENT_NAME, $payload, self::RELEASE_TTL );
+
+		return $release;
+	}
+
+	/**
+	 * Inject update info into WordPress update transient.
 	 *
 	 * @param object $transient Update transient.
 	 * @return object
 	 */
-	public function check_for_update( $transient ) {
+	public static function inject_update( $transient ) {
 		if ( ! is_object( $transient ) ) {
 			$transient = new stdClass();
 		}
 
-		if ( empty( $transient->checked ) || empty( $transient->checked[ $this->plugin_basename ] ) ) {
+		if ( empty( $transient->checked ) || ! is_array( $transient->checked ) ) {
 			return $transient;
 		}
 
-		$release = $this->get_latest_release();
-
-		if ( ! $release ) {
+		$plugin_file = self::plugin_file();
+		if ( ! isset( $transient->checked[ $plugin_file ] ) ) {
 			return $transient;
 		}
 
-		$latest_version = $this->get_release_version( $release );
-		$package_url    = $this->get_package_url( $release );
+		$release = self::latest_release();
+		if ( is_wp_error( $release ) || empty( $release['version'] ) || empty( $release['package_url'] ) ) {
+			return $transient;
+		}
 
-		if ( ! $latest_version || ! $package_url || ! version_compare( $latest_version, $this->version, '>' ) ) {
+		if ( version_compare( $release['version'], self::current_version(), '<=' ) ) {
+			if ( empty( $transient->no_update ) || ! is_array( $transient->no_update ) ) {
+				$transient->no_update = array();
+			}
+
+			if ( ! isset( $transient->no_update[ $plugin_file ] ) ) {
+				$transient->no_update[ $plugin_file ] = (object) array(
+					'slug'        => self::plugin_slug(),
+					'plugin'      => $plugin_file,
+					'new_version' => self::current_version(),
+					'url'         => $release['html_url'] ?: self::repository_url(),
+					'package'     => '',
+				);
+			}
+
 			return $transient;
 		}
 
@@ -87,27 +274,88 @@ class GWR_GitHub_Updater {
 			$transient->response = array();
 		}
 
-		$transient->response[ $this->plugin_basename ] = (object) array(
-			'id'            => self::OWNER . '/' . self::REPO,
-			'slug'          => self::SLUG,
-			'plugin'        => $this->plugin_basename,
-			'new_version'   => $latest_version,
-			'url'           => $this->get_repository_url(),
-			'package'       => $package_url,
+		if ( isset( $transient->no_update ) && is_array( $transient->no_update ) ) {
+			unset( $transient->no_update[ $plugin_file ] );
+		}
+
+		$transient->response[ $plugin_file ] = (object) array(
+			'id'            => self::repository(),
+			'slug'          => self::plugin_slug(),
+			'plugin'        => $plugin_file,
+			'new_version'   => $release['version'],
+			'url'           => $release['html_url'] ?: self::repository_url(),
+			'package'       => $release['package_url'],
 			'requires'      => '6.0',
 			'requires_php'  => '7.4',
 			'tested'        => '6.8',
-			'icons'         => array(),
-			'banners'       => array(),
-			'banners_rtl'   => array(),
-			'upgrade_notice' => $this->get_upgrade_notice( $release ),
+			'upgrade_notice' => self::upgrade_notice( $release ),
 		);
 
 		return $transient;
 	}
 
 	/**
-	 * Provide details for the "View version details" modal.
+	 * Backward-compatible instance method.
+	 *
+	 * @param object $transient Update transient.
+	 * @return object
+	 */
+	public function check_for_update( $transient ) {
+		return self::inject_update( $transient );
+	}
+
+	/**
+	 * Plugin details modal.
+	 *
+	 * @param false|object|array $result Existing result.
+	 * @param string             $action API action.
+	 * @param object             $args API args.
+	 * @return false|object|array
+	 */
+	public static function plugin_info( $result, $action, $args ) {
+		if ( 'plugin_information' !== $action || empty( $args->slug ) ) {
+			return $result;
+		}
+
+		$slug = sanitize_key( (string) $args->slug );
+		if ( $slug !== sanitize_key( self::plugin_slug() ) ) {
+			return $result;
+		}
+
+		$release = self::latest_release();
+		if ( is_wp_error( $release ) ) {
+			return $result;
+		}
+
+		$headers = get_file_data(
+			GWR_PLUGIN_FILE,
+			array(
+				'Name'        => 'Plugin Name',
+				'Description' => 'Description',
+				'Author'      => 'Author',
+			)
+		);
+
+		return (object) array(
+			'name'          => $headers['Name'] ?: 'Gest Web Rent',
+			'slug'          => self::plugin_slug(),
+			'version'       => $release['version'],
+			'author'        => $headers['Author'],
+			'homepage'      => $release['html_url'] ?: self::repository_url(),
+			'download_link' => $release['package_url'],
+			'last_updated'  => $release['published_at'],
+			'requires'      => '6.0',
+			'requires_php'  => '7.4',
+			'tested'        => '6.8',
+			'sections'      => array(
+				'description' => wpautop( esc_html( $headers['Description'] ) ),
+				'changelog'   => wpautop( esc_html( (string) ( $release['body'] ?: 'Nessun changelog disponibile.' ) ) ),
+			),
+		);
+	}
+
+	/**
+	 * Backward-compatible instance method.
 	 *
 	 * @param false|object|array $result Existing result.
 	 * @param string             $action API action.
@@ -115,65 +363,97 @@ class GWR_GitHub_Updater {
 	 * @return false|object|array
 	 */
 	public function plugin_information( $result, $action, $args ) {
-		if ( 'plugin_information' !== $action || empty( $args->slug ) || self::SLUG !== $args->slug ) {
-			return $result;
-		}
-
-		$release = $this->get_latest_release();
-
-		if ( ! $release ) {
-			return $result;
-		}
-
-		$version = $this->get_release_version( $release );
-		$body    = ! empty( $release['body'] ) ? $release['body'] : __( 'Release pubblicata su GitHub.', 'gest-web-rent' );
-
-		return (object) array(
-			'name'          => 'Gest Web Rent',
-			'slug'          => self::SLUG,
-			'version'       => $version,
-			'author'        => '<a href="https://github.com/' . esc_attr( self::OWNER ) . '">Francesco Frattomella</a>',
-			'homepage'      => $this->get_repository_url(),
-			'requires'      => '6.0',
-			'requires_php'  => '7.4',
-			'tested'        => '6.8',
-			'last_updated'  => isset( $release['published_at'] ) ? $release['published_at'] : '',
-			'sections'      => array(
-				'description' => '<p>' . esc_html__( 'Gestione veicoli a noleggio con catalogo frontend, disponibilita e contatti WhatsApp Business/email.', 'gest-web-rent' ) . '</p>',
-				'changelog'   => wp_kses_post( nl2br( esc_html( $body ) ) ),
-			),
-			'download_link' => $this->get_package_url( $release ),
-		);
+		return self::plugin_info( $result, $action, $args );
 	}
 
 	/**
-	 * Ensure the extracted folder keeps the expected plugin directory name.
+	 * Add GitHub headers to API and asset download requests.
 	 *
-	 * GitHub source archives can extract as owner-repo-hash. The release workflow
-	 * ships gest-web-rent.zip correctly, but this fallback keeps updates safe.
+	 * @param array  $args Request args.
+	 * @param string $url URL.
+	 * @return array
+	 */
+	public static function filter_http_args( $args, $url ) {
+		if ( 0 !== strpos( (string) $url, 'https://api.github.com/repos/' . self::repository() . '/' ) ) {
+			return $args;
+		}
+
+		$headers = isset( $args['headers'] ) && is_array( $args['headers'] ) ? $args['headers'] : array();
+		$binary = false !== strpos( (string) $url, '/releases/assets/' ) || false !== strpos( (string) $url, '/zipball/' );
+
+		$args['headers'] = array_merge( $headers, self::api_headers( $binary ) );
+
+		return $args;
+	}
+
+	/**
+	 * Keep the plugin installed in wp-content/plugins/gest-web-rent.
 	 *
-	 * @param string      $source Extracted source path.
+	 * @param bool|WP_Error $response Install response.
+	 * @param array         $hook_extra Hook context.
+	 * @param array         $result Install result.
+	 * @return bool|WP_Error|array
+	 */
+	public static function fix_install_directory( $response, $hook_extra, $result ) {
+		if ( empty( $hook_extra['plugin'] ) || $hook_extra['plugin'] !== self::plugin_file() ) {
+			return $response;
+		}
+
+		if ( empty( $result['destination'] ) ) {
+			return $response;
+		}
+
+		$expected = trailingslashit( WP_PLUGIN_DIR ) . self::plugin_slug();
+		$current = untrailingslashit( (string) $result['destination'] );
+
+		if ( $current === untrailingslashit( $expected ) ) {
+			return $result;
+		}
+
+		global $wp_filesystem;
+		if ( ! $wp_filesystem ) {
+			return $result;
+		}
+
+		if ( $wp_filesystem->exists( $expected ) ) {
+			$wp_filesystem->delete( $expected, true );
+		}
+
+		if ( function_exists( 'move_dir' ) ) {
+			$moved = move_dir( $current, $expected, true );
+			if ( is_wp_error( $moved ) ) {
+				return $moved;
+			}
+		} elseif ( ! $wp_filesystem->move( $current, $expected, true ) ) {
+			return new WP_Error( 'gwr_github_move_failed', 'Impossibile spostare il plugin aggiornato nella cartella finale.' );
+		}
+
+		$result['destination'] = $expected;
+		$result['destination_name'] = basename( $expected );
+
+		return $result;
+	}
+
+	/**
+	 * Backward-compatible source-folder fallback.
+	 *
+	 * @param string      $source Source path.
 	 * @param string      $remote_source Remote source path.
-	 * @param WP_Upgrader $upgrader Upgrader instance.
-	 * @param array       $hook_extra Extra upgrade context.
+	 * @param WP_Upgrader $upgrader Upgrader.
+	 * @param array       $hook_extra Hook context.
 	 * @return string
 	 */
 	public function fix_source_folder( $source, $remote_source, $upgrader, $hook_extra = array() ) {
-		if ( empty( $hook_extra['plugin'] ) || $this->plugin_basename !== $hook_extra['plugin'] ) {
-			return $source;
-		}
-
-		if ( self::SLUG === basename( $source ) ) {
+		if ( empty( $hook_extra['plugin'] ) || self::plugin_file() !== $hook_extra['plugin'] || self::plugin_slug() === basename( $source ) ) {
 			return $source;
 		}
 
 		global $wp_filesystem;
-
 		if ( ! $wp_filesystem ) {
 			return $source;
 		}
 
-		$target = trailingslashit( $remote_source ) . self::SLUG;
+		$target = trailingslashit( $remote_source ) . self::plugin_slug();
 
 		if ( $wp_filesystem->exists( $target ) ) {
 			$wp_filesystem->delete( $target, true );
@@ -187,126 +467,124 @@ class GWR_GitHub_Updater {
 	}
 
 	/**
-	 * Download packages with an Authorization header when a private token exists.
+	 * Clear cache after this plugin upgrades.
 	 *
-	 * @param false|WP_Error|string $reply Existing pre-download result.
-	 * @param string                $package Package URL.
-	 * @param WP_Upgrader           $upgrader Upgrader instance.
-	 * @param array                 $hook_extra Extra upgrade context.
-	 * @return false|WP_Error|string
+	 * @param WP_Upgrader $upgrader Upgrader.
+	 * @param array       $hook_extra Hook context.
+	 * @return void
 	 */
-	public function download_private_package( $reply, $package, $upgrader, $hook_extra = array() ) {
-		if ( false !== $reply ) {
-			return $reply;
+	public static function clear_cache_after_upgrade( $upgrader, $hook_extra ) {
+		if ( empty( $hook_extra['type'] ) || 'plugin' !== $hook_extra['type'] ) {
+			return;
 		}
 
-		if ( empty( $hook_extra['plugin'] ) || $this->plugin_basename !== $hook_extra['plugin'] ) {
-			return $reply;
+		if ( ! empty( $hook_extra['plugins'] ) && is_array( $hook_extra['plugins'] ) && in_array( self::plugin_file(), $hook_extra['plugins'], true ) ) {
+			self::clear_cache();
+			return;
 		}
 
-		$token = $this->get_token();
-
-		if ( ! $token || false === strpos( $package, 'github.com' ) ) {
-			return $reply;
+		if ( ! empty( $hook_extra['plugin'] ) && $hook_extra['plugin'] === self::plugin_file() ) {
+			self::clear_cache();
 		}
-
-		if ( ! function_exists( 'wp_tempnam' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-		}
-
-		$tmp_file = wp_tempnam( $package );
-
-		if ( ! $tmp_file ) {
-			return new WP_Error( 'gwr_temp_file_failed', __( 'Impossibile creare un file temporaneo per il download.', 'gest-web-rent' ) );
-		}
-
-		$response = wp_remote_get(
-			$package,
-			array(
-				'timeout'     => 60,
-				'redirection' => 5,
-				'headers'     => $this->get_github_headers( true ),
-			)
-		);
-
-		if ( is_wp_error( $response ) ) {
-			@unlink( $tmp_file );
-			return $response;
-		}
-
-		$code = wp_remote_retrieve_response_code( $response );
-
-		if ( 200 !== (int) $code ) {
-			@unlink( $tmp_file );
-			return new WP_Error( 'gwr_download_failed', sprintf( __( 'Download GitHub non riuscito. Codice risposta: %d', 'gest-web-rent' ), (int) $code ) );
-		}
-
-		$bytes = file_put_contents( $tmp_file, wp_remote_retrieve_body( $response ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-
-		if ( false === $bytes ) {
-			@unlink( $tmp_file );
-			return new WP_Error( 'gwr_write_failed', __( 'Impossibile salvare il pacchetto scaricato.', 'gest-web-rent' ) );
-		}
-
-		return $tmp_file;
 	}
 
 	/**
-	 * Retrieve and cache latest GitHub release data.
+	 * Deprecated manual pre-download hook kept for compatibility.
 	 *
+	 * @param false|WP_Error|string $reply Existing reply.
+	 * @param string                $package Package URL.
+	 * @param WP_Upgrader           $upgrader Upgrader.
+	 * @param array                 $hook_extra Hook context.
+	 * @return false|WP_Error|string
+	 */
+	public function download_private_package( $reply, $package, $upgrader, $hook_extra = array() ) {
+		return $reply;
+	}
+
+	/**
+	 * Normalize a GitHub release API payload.
+	 *
+	 * @param array $payload Raw payload.
 	 * @return array|false
 	 */
-	private function get_latest_release() {
-		$cached = get_site_transient( self::TRANSIENT_NAME );
-
-		if ( is_array( $cached ) ) {
-			return $cached;
+	private static function normalize_release_payload( $payload ) {
+		if ( ! is_array( $payload ) || empty( $payload['tag_name'] ) ) {
+			return false;
 		}
 
-		$response = wp_remote_get(
-			'https://api.github.com/repos/' . self::OWNER . '/' . self::REPO . '/releases/latest',
-			array(
-				'timeout' => 15,
-				'headers' => $this->get_github_headers(),
-			)
+		$asset = self::match_asset( isset( $payload['assets'] ) && is_array( $payload['assets'] ) ? $payload['assets'] : array() );
+
+		$asset_api_url = ! empty( $asset['url'] ) ? esc_url_raw( (string) $asset['url'] ) : '';
+		$asset_browser_url = ! empty( $asset['browser_download_url'] ) ? esc_url_raw( (string) $asset['browser_download_url'] ) : '';
+		$zipball_url = ! empty( $payload['zipball_url'] ) ? esc_url_raw( (string) $payload['zipball_url'] ) : '';
+
+		$release = array(
+			'tag'               => sanitize_text_field( (string) $payload['tag_name'] ),
+			'version'           => ltrim( sanitize_text_field( (string) $payload['tag_name'] ), 'vV' ),
+			'name'              => sanitize_text_field( (string) ( $payload['name'] ?? $payload['tag_name'] ) ),
+			'body'              => (string) ( $payload['body'] ?? '' ),
+			'html_url'          => esc_url_raw( (string) ( $payload['html_url'] ?? self::repository_url() ) ),
+			'published_at'      => sanitize_text_field( (string) ( $payload['published_at'] ?? '' ) ),
+			'zipball_url'       => $zipball_url,
+			'asset_api_url'     => $asset_api_url,
+			'asset_browser_url' => $asset_browser_url,
+			'asset_name'        => ! empty( $asset['name'] ) ? sanitize_file_name( (string) $asset['name'] ) : '',
 		);
 
-		if ( is_wp_error( $response ) ) {
-			return false;
-		}
-
-		$code = wp_remote_retrieve_response_code( $response );
-
-		if ( 200 !== (int) $code ) {
-			return false;
-		}
-
-		$release = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		if ( ! is_array( $release ) || empty( $release['tag_name'] ) ) {
-			return false;
-		}
-
-		set_site_transient( self::TRANSIENT_NAME, $release, 6 * HOUR_IN_SECONDS );
+		$release['package_url'] = $asset_api_url ?: ( $asset_browser_url ?: $zipball_url );
 
 		return $release;
 	}
 
 	/**
-	 * Build GitHub request headers.
+	 * Find the preferred release ZIP asset.
 	 *
-	 * @param bool $download Whether this is an asset download request.
+	 * @param array $assets Assets.
 	 * @return array
 	 */
-	private function get_github_headers( $download = false ) {
+	private static function match_asset( $assets ) {
+		if ( empty( $assets ) ) {
+			return array();
+		}
+
+		$preferred = self::asset_name();
+		foreach ( $assets as $asset ) {
+			if ( ! is_array( $asset ) || empty( $asset['name'] ) ) {
+				continue;
+			}
+
+			if ( sanitize_file_name( (string) $asset['name'] ) === $preferred ) {
+				return $asset;
+			}
+		}
+
+		foreach ( $assets as $asset ) {
+			if ( ! is_array( $asset ) || empty( $asset['name'] ) ) {
+				continue;
+			}
+
+			if ( '.zip' === substr( strtolower( (string) $asset['name'] ), -4 ) ) {
+				return $asset;
+			}
+		}
+
+		return array();
+	}
+
+	/**
+	 * Build GitHub API headers.
+	 *
+	 * @param bool $binary Binary asset request.
+	 * @return array
+	 */
+	private static function api_headers( $binary = false ) {
 		$headers = array(
-			'Accept'     => $download ? 'application/octet-stream' : 'application/vnd.github+json',
-			'User-Agent' => self::SLUG . '-wordpress-updater',
+			'User-Agent' => self::SLUG . '/' . self::current_version() . '; ' . home_url( '/' ),
+			'Accept'     => $binary ? 'application/octet-stream' : 'application/vnd.github+json',
 		);
 
-		$token = $this->get_token();
-
-		if ( $token ) {
+		$token = self::token();
+		if ( '' !== $token ) {
 			$headers['Authorization'] = 'Bearer ' . $token;
 		}
 
@@ -314,80 +592,22 @@ class GWR_GitHub_Updater {
 	}
 
 	/**
-	 * Read optional GitHub token from plugin settings.
+	 * Store latest updater error.
 	 *
-	 * @return string
+	 * @param string $message Error message.
+	 * @return void
 	 */
-	private function get_token() {
-		$options = get_option( self::OPTION_NAME, array() );
-
-		if ( ! is_array( $options ) || empty( $options['github_access_token'] ) ) {
-			return '';
-		}
-
-		return trim( (string) $options['github_access_token'] );
+	private static function store_error( $message ) {
+		set_site_transient( self::ERROR_TRANSIENT, sanitize_text_field( (string) $message ), self::RELEASE_TTL );
 	}
 
 	/**
-	 * Extract semantic version from release tag.
+	 * Short update notice from release body.
 	 *
-	 * @param array $release GitHub release data.
+	 * @param array $release Release.
 	 * @return string
 	 */
-	private function get_release_version( $release ) {
-		if ( empty( $release['tag_name'] ) ) {
-			return '';
-		}
-
-		return ltrim( (string) $release['tag_name'], 'vV' );
-	}
-
-	/**
-	 * Resolve package URL from release assets, falling back to source ZIP.
-	 *
-	 * @param array $release GitHub release data.
-	 * @return string
-	 */
-	private function get_package_url( $release ) {
-		if ( ! empty( $release['assets'] ) && is_array( $release['assets'] ) ) {
-			foreach ( $release['assets'] as $asset ) {
-				if ( empty( $asset['name'] ) || self::SLUG . '.zip' !== $asset['name'] ) {
-					continue;
-				}
-
-				if ( $this->get_token() && ! empty( $asset['url'] ) ) {
-					return esc_url_raw( $asset['url'] );
-				}
-
-				if ( ! empty( $asset['browser_download_url'] ) ) {
-					return esc_url_raw( $asset['browser_download_url'] );
-				}
-			}
-		}
-
-		if ( ! empty( $release['zipball_url'] ) ) {
-			return esc_url_raw( $release['zipball_url'] );
-		}
-
-		return '';
-	}
-
-	/**
-	 * Build repository URL.
-	 *
-	 * @return string
-	 */
-	private function get_repository_url() {
-		return 'https://github.com/' . self::OWNER . '/' . self::REPO;
-	}
-
-	/**
-	 * Build a short upgrade notice from release body.
-	 *
-	 * @param array $release GitHub release data.
-	 * @return string
-	 */
-	private function get_upgrade_notice( $release ) {
+	private static function upgrade_notice( $release ) {
 		if ( empty( $release['body'] ) ) {
 			return '';
 		}

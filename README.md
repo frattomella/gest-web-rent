@@ -153,7 +153,7 @@ https://github.com/frattomella/gest-web-rent
 
 L'updater cerca prima l'asset release `gest-web-rent.zip`; solo come fallback usa lo zipball GitHub e rinomina la cartella estratta in `gest-web-rent`.
 
-Dalla dashboard `Gest Web Rent` e disponibile il box `Aggiornamenti GitHub` con il pulsante `Controlla aggiornamenti GitHub`: svuota le cache `gwr_github_release` e `update_plugins`, forza `wp_update_plugins()` e rimanda alla dashboard con conferma. L'installazione dell'aggiornamento resta manuale dalla pagina Plugin di WordPress.
+Dalla dashboard `Gest Web Rent` e disponibile il box `Aggiornamenti GitHub` con il pulsante `Controlla aggiornamenti GitHub`: svuota le cache `gwr_github_release_payload`, `gwr_github_release` e `update_plugins`, forza `wp_update_plugins()` e rimanda alla dashboard con conferma. L'installazione dell'aggiornamento resta manuale dalla pagina Plugin di WordPress.
 
 ## Versionamento
 
@@ -167,5 +167,5 @@ Ogni release deve aggiornare:
 Release corrente:
 
 ```text
-1.1.2
+1.1.3
 ```

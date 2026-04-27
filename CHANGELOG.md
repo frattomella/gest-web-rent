@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.3
+
+- Allineato controllo aggiornamenti GitHub al comportamento di GestPark Online.
+- Aggiunta cache release dedicata `gwr_github_release_payload`.
+- Aggiunto pulsante dashboard per forzare refresh GitHub e WordPress update cache.
+- Migliorata compatibilita con asset release `gest-web-rent.zip`.
+
 ## 1.1.2
 
 - Aggiunto pulsante dashboard per forzare il controllo aggiornamenti GitHub.
