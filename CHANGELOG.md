@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+- Aggiunto pulsante dashboard per forzare il controllo aggiornamenti GitHub.
+- Pulizia transient update_plugins e gwr_github_release.
+- Reindirizzamento alla dashboard con messaggio di conferma.
+
 ## 1.1.0
 
 - Refactor radicale su tabelle custom `wp_gwr_vehicles`, `wp_gwr_vehicle_images`, `wp_gwr_availability`.

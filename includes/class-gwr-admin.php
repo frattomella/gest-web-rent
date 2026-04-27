@@ -27,6 +27,7 @@ class GWR_Admin {
 		add_action( 'admin_post_gwr_duplicate_vehicle', array( __CLASS__, 'handle_duplicate_vehicle' ) );
 		add_action( 'admin_post_gwr_save_availability', array( __CLASS__, 'handle_save_availability' ) );
 		add_action( 'admin_post_gwr_delete_availability', array( __CLASS__, 'handle_delete_availability' ) );
+		add_action( 'admin_post_gwr_force_update_check', array( __CLASS__, 'handle_force_update_check' ) );
 	}
 
 	/**
@@ -174,6 +175,8 @@ class GWR_Admin {
 			)
 		);
 
+		self::admin_notice();
+
 		echo '<div class="gwr-kpi-grid">';
 		self::metric_card( __( 'Veicoli totali', 'gest-web-rent' ), $counts['total'], __( 'Archivio noleggio interno', 'gest-web-rent' ) );
 		self::metric_card( __( 'Veicoli attivi', 'gest-web-rent' ), $counts['active'], __( 'Visibili nel catalogo', 'gest-web-rent' ) );
@@ -188,6 +191,14 @@ class GWR_Admin {
 		self::status_line( __( 'WhatsApp Business', 'gest-web-rent' ), ! empty( $settings['whatsapp_number'] ) );
 		self::status_line( __( 'Email concessionario', 'gest-web-rent' ), ! empty( $settings['contact_email'] ) );
 		echo '</div><div class="gwr-inline-actions"><a class="button button-secondary" href="' . esc_url( admin_url( 'admin.php?page=gwr-settings' ) ) . '">' . esc_html__( 'Configura contatti', 'gest-web-rent' ) . '</a></div></section>';
+		echo '<section class="gwr-surface"><span class="gwr-surface__eyebrow">' . esc_html__( 'GitHub', 'gest-web-rent' ) . '</span><h2>' . esc_html__( 'Aggiornamenti GitHub', 'gest-web-rent' ) . '</h2>';
+		echo '<p>' . esc_html__( 'Forza il controllo delle release GitHub e aggiorna la cache aggiornamenti di WordPress.', 'gest-web-rent' ) . '</p>';
+		echo '<p><strong>' . esc_html__( 'Versione installata:', 'gest-web-rent' ) . '</strong> ' . esc_html( GWR_VERSION ) . '</p>';
+		echo '<p><strong>' . esc_html__( 'Repository:', 'gest-web-rent' ) . '</strong> <code>frattomella/gest-web-rent</code></p>';
+		echo '<div class="gwr-inline-actions">';
+		echo '<a class="button button-primary" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=gwr_force_update_check' ), 'gwr_force_update_check' ) ) . '">' . esc_html__( 'Controlla aggiornamenti GitHub', 'gest-web-rent' ) . '</a>';
+		echo '<a class="button button-secondary" href="' . esc_url( admin_url( 'plugins.php' ) ) . '">' . esc_html__( 'Vai alla pagina Plugin', 'gest-web-rent' ) . '</a>';
+		echo '</div></section>';
 		echo '</div>';
 
 		self::render_quick_settings( $settings );
@@ -412,6 +423,38 @@ class GWR_Admin {
 		GWR_CPT::delete_availability( $row_id );
 		$redirect = isset( $_GET['redirect'] ) ? esc_url_raw( wp_unslash( $_GET['redirect'] ) ) : admin_url( 'admin.php?page=gwr-availability' );
 		self::redirect_with_message( $redirect, 'updated', __( 'Indisponibilita eliminata.', 'gest-web-rent' ) );
+	}
+
+	/**
+	 * Force GitHub release/update cache refresh.
+	 *
+	 * @return void
+	 */
+	public static function handle_force_update_check() {
+		self::require_admin_capability();
+		check_admin_referer( 'gwr_force_update_check' );
+
+		delete_site_transient( 'gwr_github_release' );
+		delete_site_transient( 'update_plugins' );
+
+		if ( ! function_exists( 'wp_update_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/update.php';
+		}
+
+		if ( function_exists( 'wp_update_plugins' ) ) {
+			wp_update_plugins();
+		}
+
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page'        => 'gest-web-rent',
+					'gwr_message' => 'updates_checked',
+				),
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
 	}
 
 	/**
@@ -898,7 +941,13 @@ class GWR_Admin {
 		}
 
 		$type = isset( $_GET['gwr_notice'] ) && 'error' === $_GET['gwr_notice'] ? 'notice-error' : 'notice-success';
-		echo '<div class="notice ' . esc_attr( $type ) . ' inline"><p>' . esc_html( sanitize_text_field( wp_unslash( $_GET['gwr_message'] ) ) ) . '</p></div>';
+		$message = sanitize_text_field( wp_unslash( $_GET['gwr_message'] ) );
+
+		if ( 'updates_checked' === $message ) {
+			$message = __( 'Controllo aggiornamenti GitHub completato. Se esiste una release piu recente, l\'aggiornamento sara visibile nella pagina Plugin.', 'gest-web-rent' );
+		}
+
+		echo '<div class="notice ' . esc_attr( $type ) . ' inline is-dismissible"><p>' . esc_html( $message ) . '</p></div>';
 	}
 
 	/**

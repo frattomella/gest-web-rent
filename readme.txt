@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,11 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 1.1.2 =
+* Aggiunto pulsante dashboard per forzare il controllo aggiornamenti GitHub.
+* Pulizia transient `update_plugins` e `gwr_github_release`.
+* Reindirizzamento alla dashboard con messaggio di conferma.
 
 = 1.1.0 =
 * Refactor radicale su tabelle custom `wp_gwr_vehicles`, `wp_gwr_vehicle_images`, `wp_gwr_availability`.
