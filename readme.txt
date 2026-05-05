@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,15 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 1.1.4 =
+* Ridisegnata UI del popup dettaglio veicolo.
+* Migliorata gallery immagini responsive.
+* Sostituiti i grandi riquadri caratteristiche con statistiche compatte con icone.
+* Ridisegnato pannello calendario e filtri catalogo.
+* Uniformato stile di input, select e campi numerici.
+* Rimosso banner "Catalogo noleggio".
+* Migliorata UX mobile del modal e del catalogo.
 
 = 1.1.3 =
 * Allineato controllo aggiornamenti GitHub al comportamento di GestPark Online.

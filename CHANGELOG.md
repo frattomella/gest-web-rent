@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.4
+
+- Ridisegnata UI del popup dettaglio veicolo.
+- Migliorata gallery immagini responsive.
+- Sostituiti i grandi riquadri caratteristiche con statistiche compatte con icone.
+- Ridisegnato pannello calendario e filtri catalogo.
+- Uniformato stile di input, select e campi numerici.
+- Rimosso banner "Catalogo noleggio".
+- Migliorata UX mobile del modal e del catalogo.
+
 ## 1.1.3
 
 - Allineato controllo aggiornamenti GitHub al comportamento di GestPark Online.

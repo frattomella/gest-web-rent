@@ -32,7 +32,6 @@ class GWR_Frontend {
 		$vehicles = self::filtered_vehicles( $filters, $error );
 		ob_start();
 		echo '<section class="gwr-rent-catalog gwr-block" data-gwr-catalog style="' . esc_attr( self::style_vars( $atts['max_width'] ) ) . '">';
-		echo '<div class="gwr-catalog-hero"><div><span class="gwr-kicker">Gest Web Rent</span><h2>' . esc_html( $atts['title'] ) . '</h2><p>' . esc_html( $atts['subtitle'] ) . '</p></div><div class="gwr-catalog-hero__badge">' . esc_html__( 'Filtro date automatico', 'gest-web-rent' ) . '</div></div>';
 		echo self::filter_form( $filters, $error );
 		echo '<div class="gwr-results-head"><strong data-gwr-count>' . esc_html( sprintf( _n( '%d veicolo disponibile', '%d veicoli disponibili', count( $vehicles ), 'gest-web-rent' ), count( $vehicles ) ) ) . '</strong><span>' . esc_html__( 'Clicca una card per dettagli e contatto.', 'gest-web-rent' ) . '</span></div>';
 		echo '<div class="gwr-catalog-error" data-gwr-error ' . ( $error ? '' : 'hidden' ) . '>' . esc_html( $error ) . '</div>';
@@ -71,7 +70,12 @@ class GWR_Frontend {
 
 	private static function filter_form( $filters, $error ) {
 		$html = '<form class="gwr-filter-panel" method="get" data-gwr-filter-form>';
-		$html .= '<div class="gwr-date-strip"><div><span class="gwr-kicker">' . esc_html__( 'Date noleggio', 'gest-web-rent' ) . '</span><strong>' . esc_html__( 'Aggiorna automatico', 'gest-web-rent' ) . '</strong></div>';
+		$html .= '<div class="gwr-filter-intro">';
+		$html .= '<span class="gwr-filter-eyebrow">' . esc_html__( 'Noleggio veicoli', 'gest-web-rent' ) . '</span>';
+		$html .= '<h3>' . esc_html__( 'Trova il veicolo giusto per il tuo noleggio', 'gest-web-rent' ) . '</h3>';
+		$html .= '<p>' . esc_html__( 'Seleziona le date di interesse: il catalogo mostrera automaticamente solo i veicoli disponibili e precompilera WhatsApp ed email.', 'gest-web-rent' ) . '</p>';
+		$html .= '</div>';
+		$html .= '<div class="gwr-date-grid">';
 		$html .= self::date_field( 'start_date', __( 'Data inizio', 'gest-web-rent' ), $filters['start_date'] );
 		$html .= self::date_field( 'end_date', __( 'Data fine', 'gest-web-rent' ), $filters['end_date'] ) . '</div><div class="gwr-filter-grid">';
 		$html .= self::text_field( 'search', __( 'Ricerca libera', 'gest-web-rent' ), $filters['search'], __( 'Marca, modello, titolo...', 'gest-web-rent' ) );
