@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.5
+
+- Date frontend nel formato italiano `GG-MM-AAAA` con valori ISO interni.
+- Ricerca veicoli avviata solo al submit, senza chiamate AJAX a ogni modifica.
+- Filtri secondari raccolti in un accordion accessibile e responsive.
+- Ridisegnato il modal veicolo con gallery `object-fit: contain`, sezioni e divisori.
+- Normalizzati e validati i contatti WhatsApp ed email con date italiane nei messaggi.
+- Migliorati focus, navigazione tastiera, palette blu/grigio e usabilita mobile.
+
 ## 1.1.4
 
 - Ridisegnata UI del popup dettaglio veicolo.
