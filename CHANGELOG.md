@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.2
+
+- Corretto il caricamento del dettaglio quando tariffazione, disponibilita o validazione del periodo non sono disponibili.
+- Aggiunto fallback dal payload commerciale esteso al payload veicolo essenziale.
+- Isolate le eccezioni dei servizi secondari e protetta la risposta JSON da warning/output PHP inatteso.
+- Reso tollerante il parser JavaScript a BOM e spazi nella risposta AJAX.
+- Corretto il messaggio di errore duplicato e distinta la sessione nonce scaduta dagli altri errori.
+
 ## 1.9.1
 
 - Corretto il bug bloccante che mostrava il fallback generico al posto del dettaglio veicolo.

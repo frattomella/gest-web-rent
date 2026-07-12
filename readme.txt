@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.1
+Stable tag: 1.9.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,11 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 1.9.2 =
+* Il dettaglio veicolo non viene piu bloccato da errori secondari di prezzo, disponibilita o periodo.
+* Protetta la risposta AJAX da warning PHP e output inatteso.
+* Corretto il messaggio di errore duplicato e aggiunta gestione specifica della sessione scaduta.
 
 = 1.9.1 =
 * Corretto il caricamento on demand del dettaglio veicolo usando l'ID reale della card.

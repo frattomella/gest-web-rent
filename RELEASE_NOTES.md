@@ -1,10 +1,9 @@
-# Gest Web Rent v1.9.1
+# Gest Web Rent v1.9.2
 
-Questa release correttiva ripristina il caricamento affidabile del dettaglio veicolo e conclude il QA del configuratore pubblico.
+Questa patch rende il caricamento del dettaglio indipendente dagli errori dei servizi commerciali secondari.
 
-- Card e risultati AJAX collegati tramite ID veicolo canonico, senza payload Base64 incorporato.
-- Endpoint pubblico normalizzato con disponibilita, preventivo server e dati commerciali consentiti.
-- Loading, retry, cache per contesto e protezione da richieste concorrenti o risposte obsolete.
-- Modal piu proporzionato su desktop e rifinito per tablet e mobile fino a 320 px.
-- Miglioramenti di accessibilita, sicurezza del rendering e gestione degli errori reali.
+- Il veicolo viene mostrato anche se prezzo, disponibilita o periodo non possono essere calcolati.
+- Fallback sicuro al payload essenziale quando le condizioni commerciali estese non sono disponibili.
+- Risposta AJAX protetta da warning PHP e output inatteso.
+- Messaggio di errore non duplicato e gestione specifica della sessione scaduta.
 - Asset ufficiale `gest-web-rent.zip` con cartella radice corretta per WordPress.

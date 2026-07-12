@@ -134,8 +134,22 @@ class GWR_Frontend {
 			);
 		}
 
-		$vehicle_id = isset( $_POST['vehicle_id'] ) ? absint( $_POST['vehicle_id'] ) : 0;
-		$details    = self::get_public_vehicle_details( $vehicle_id, $_POST );
+		$vehicle_id   = isset( $_POST['vehicle_id'] ) ? absint( $_POST['vehicle_id'] ) : 0;
+		$buffer_level = ob_get_level();
+		ob_start();
+		try {
+			$details = self::get_public_vehicle_details( $vehicle_id, $_POST );
+		} catch ( Throwable $error ) {
+			self::debug_detail_error( 'endpoint', $vehicle_id, $error );
+			$details = new WP_Error( 'server_error', __( 'Non e stato possibile caricare il veicolo.', 'gest-web-rent' ), array( 'status' => 500 ) );
+		}
+		$unexpected_output = '';
+		while ( ob_get_level() > $buffer_level ) {
+			$unexpected_output .= (string) ob_get_clean();
+		}
+		if ( '' !== trim( $unexpected_output ) ) {
+			self::debug_detail_error( 'unexpected_output', $vehicle_id );
+		}
 
 		if ( is_wp_error( $details ) ) {
 			$error_data = $details->get_error_data();
@@ -174,32 +188,51 @@ class GWR_Frontend {
 
 		$filters = self::filters_from_request( is_array( $context ) ? $context : array() );
 		$period  = self::detail_period( $filters );
-		if ( is_wp_error( $period ) ) {
-			return $period;
-		}
 
-		$payload = GWR_CPT::public_payload( $vehicle, true );
+		try {
+			$payload = GWR_CPT::public_payload( $vehicle, true );
+		} catch ( Throwable $error ) {
+			self::debug_detail_error( 'extended_payload', $vehicle_id, $error );
+			$payload                 = GWR_CPT::public_payload( $vehicle, false );
+			$payload['rental_terms'] = array();
+			$payload['extras']       = array();
+		}
 		if ( empty( $payload['id'] ) ) {
 			return new WP_Error( 'invalid_response', __( 'Non e stato possibile preparare i dettagli del veicolo.', 'gest-web-rent' ), array( 'status' => 500 ) );
 		}
 
 		$availability = array( 'checked' => false, 'available' => null, 'status' => 'not_checked' );
 		$pricing      = array( 'status' => 'not_requested' );
+		if ( is_wp_error( $period ) ) {
+			$availability = array( 'checked' => false, 'available' => null, 'status' => 'invalid_period' );
+			$pricing      = array( 'status' => 'unavailable', 'code' => $period->get_error_code() );
+			$period       = null;
+		}
 
 		if ( $period ) {
-			$available    = class_exists( 'GWR_Bookings' )
-				? GWR_Bookings::is_period_available( $vehicle_id, $period['pickup_mysql'], $period['return_mysql'] )
-				: GWR_CPT::is_available( $vehicle_id, $filters['start_date'], $filters['end_date'] );
-			$availability = array( 'checked' => true, 'available' => (bool) $available, 'status' => $available ? 'available' : 'unavailable' );
+			try {
+				$available    = class_exists( 'GWR_Bookings' )
+					? GWR_Bookings::is_period_available( $vehicle_id, $period['pickup_mysql'], $period['return_mysql'] )
+					: GWR_CPT::is_available( $vehicle_id, $filters['start_date'], $filters['end_date'] );
+				$availability = array( 'checked' => true, 'available' => (bool) $available, 'status' => $available ? 'available' : 'unavailable' );
+			} catch ( Throwable $error ) {
+				self::debug_detail_error( 'availability', $vehicle_id, $error );
+				$availability = array( 'checked' => false, 'available' => null, 'status' => 'check_failed' );
+			}
 
 			if ( class_exists( 'GWR_Pricing_Service' ) ) {
-				$terms_payload = array(
-					'rental_terms' => is_array( $payload['rental_terms'] ?? null ) ? $payload['rental_terms'] : array(),
-					'extras'       => is_array( $payload['extras'] ?? null ) ? $payload['extras'] : array(),
-				);
-				$coupon_code   = sanitize_text_field( wp_unslash( $context['coupon_code'] ?? ( $context['coupon'] ?? '' ) ) );
-				$quote         = GWR_Pricing_Service::calculate( $vehicle, $period, array( 'extras' => array(), 'coverages' => array() ), array(), $terms_payload, array( 'coupon_code' => $coupon_code ) );
-				$pricing       = is_wp_error( $quote ) ? array( 'status' => 'unavailable', 'code' => $quote->get_error_code() ) : self::public_pricing_details( $quote );
+				try {
+					$terms_payload = array(
+						'rental_terms' => is_array( $payload['rental_terms'] ?? null ) ? $payload['rental_terms'] : array(),
+						'extras'       => is_array( $payload['extras'] ?? null ) ? $payload['extras'] : array(),
+					);
+					$coupon_code   = sanitize_text_field( wp_unslash( $context['coupon_code'] ?? ( $context['coupon'] ?? '' ) ) );
+					$quote         = GWR_Pricing_Service::calculate( $vehicle, $period, array( 'extras' => array(), 'coverages' => array() ), array(), $terms_payload, array( 'coupon_code' => $coupon_code ) );
+					$pricing       = is_wp_error( $quote ) ? array( 'status' => 'unavailable', 'code' => $quote->get_error_code() ) : self::public_pricing_details( $quote );
+				} catch ( Throwable $error ) {
+					self::debug_detail_error( 'pricing', $vehicle_id, $error );
+					$pricing = array( 'status' => 'unavailable', 'code' => 'pricing_failed' );
+				}
 			}
 		}
 
@@ -268,6 +301,15 @@ class GWR_Frontend {
 			'deposit_label'     => GWR_Bookings::format_money( (float) ( $quote['deposit_due_at_pickup'] ?? 0 ), $currency ),
 			'tax_total_label'   => GWR_Bookings::format_money( (float) ( $quote['tax_total'] ?? 0 ), $currency ),
 		);
+	}
+
+	/** Log a terse detail error only while WordPress debugging is enabled. */
+	private static function debug_detail_error( $stage, $vehicle_id, $error = null ) {
+		if ( ! defined( 'WP_DEBUG' ) || ! WP_DEBUG ) {
+			return;
+		}
+		$error_type = $error instanceof Throwable ? get_class( $error ) : 'output';
+		error_log( sprintf( '[GWR] Vehicle detail %s failed for ID %d (%s).', sanitize_key( $stage ), absint( $vehicle_id ), $error_type ) );
 	}
 
 	public static function register_assets() {

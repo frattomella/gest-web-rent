@@ -1019,7 +1019,11 @@
     return window.fetch(cfg.ajaxUrl, requestOptions).then(function (response) {
       return response.text().then(function (text) {
         var payload;
-        try { payload = JSON.parse(text); } catch (error) { throw new Error('invalid_response'); }
+        try { payload = JSON.parse(String(text || '').replace(/^\uFEFF/, '').trim()); } catch (error) {
+          var invalidResponse = new Error('invalid_response');
+          invalidResponse.code = 'invalid_response';
+          throw invalidResponse;
+        }
         if (!response.ok || !payload || !payload.success) {
           var requestError = new Error(payload && payload.data && payload.data.message ? payload.data.message : 'request_failed');
           requestError.code = payload && payload.data ? payload.data.code : 'request_failed';
@@ -1055,13 +1059,17 @@
     var ids = modalIds(modal);
     var title = context && context.vehicleTitle ? context.vehicleTitle : 'veicolo selezionato';
     var links = contactLinks({ title: title }, context ? context.dates : {});
+    var errorCode = error && (error.code || error.message) ? (error.code || error.message) : 'request_failed';
+    var sessionExpired = errorCode === 'invalid_nonce';
+    var message = sessionExpired ? 'La sessione della pagina e scaduta. Ricarica la pagina per continuare.' : 'Non e stato possibile caricare i dettagli del veicolo. Riprova oppure torna ai risultati.';
     var contactAction = links.whatsapp ? '<a class="gwr-button-secondary" href="' + escapeHtml(links.whatsapp) + '" target="_blank" rel="noopener noreferrer">Contatta il noleggiatore</a>' : (links.email ? '<a class="gwr-button-secondary" href="' + escapeHtml(links.email) + '">Contatta il noleggiatore</a>' : '');
-    content.innerHTML = '<div class="gwr-modal-load-error" role="alert"><span class="gwr-modal-load-error__icon" aria-hidden="true">!</span><h2 id="' + escapeHtml(ids.title) + '">Non e stato possibile caricare i dettagli del veicolo</h2><p id="' + escapeHtml(ids.description) + '">Riprova oppure torna ai risultati.</p><div class="gwr-modal-load-error__actions"><button type="button" class="gwr-button" data-gwr-retry-vehicle>Riprova</button><button type="button" class="gwr-button-secondary" data-gwr-close-modal>Chiudi</button>' + contactAction + '</div></div>';
+    var primaryAction = sessionExpired ? '<button type="button" class="gwr-button" data-gwr-reload-page>Ricarica pagina</button>' : '<button type="button" class="gwr-button" data-gwr-retry-vehicle>Riprova</button>';
+    content.innerHTML = '<div class="gwr-modal-load-error" role="alert" data-gwr-error-code="' + escapeHtml(errorCode) + '"><span class="gwr-modal-load-error__icon" aria-hidden="true">!</span><h2 id="' + escapeHtml(ids.title) + '">Dettagli veicolo</h2><p id="' + escapeHtml(ids.description) + '">' + escapeHtml(message) + '</p><div class="gwr-modal-load-error__actions">' + primaryAction + '<button type="button" class="gwr-button-secondary" data-gwr-close-modal>Chiudi</button>' + contactAction + '</div></div>';
     var dialog = qs(modal, '.gwr-modal__dialog');
     if (dialog) dialog.setAttribute('aria-busy', 'false');
     debugLog('Vehicle detail failed', error && (error.code || error.message) ? (error.code || error.message) : 'unknown');
-    var retry = qs(content, '[data-gwr-retry-vehicle]');
-    if (retry) retry.focus();
+    var primaryButton = qs(content, '[data-gwr-retry-vehicle], [data-gwr-reload-page]');
+    if (primaryButton) primaryButton.focus();
   }
 
   function prepareModalSections(modal) {
@@ -1604,6 +1612,10 @@
     var retryVehicle = event.target.closest('[data-gwr-retry-vehicle]');
     if (retryVehicle) {
       retryVehicleDetails(retryVehicle.closest('[data-gwr-modal]'));
+      return;
+    }
+    if (event.target.closest('[data-gwr-reload-page]')) {
+      window.location.reload();
       return;
     }
     var closeTrigger = event.target.closest('[data-gwr-close-modal]');
