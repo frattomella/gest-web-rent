@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.0
+
+- Completata l'area cliente `[gwr_booking_portal]` con accesso tramite codice e token casuale a 32 byte, hash HMAC nel database, scadenza configurabile, revoca e rotazione.
+- Aggiunti recupero link con risposta neutra, honeypot e rate limiting; pagine private con `no-store`, `noindex`, `nofollow` e referrer disabilitato.
+- Aggiunti stato leggibile, timeline, periodo, extra, totale, pagato, saldo, deposito, retry Stripe server-side e istruzioni bonifico copiabili.
+- Aggiunti documenti pubblicabili, checklist documenti cliente, upload PDF/JPG/PNG nello storage protetto e verifica approvato/rifiutato in amministrazione.
+- Aggiunte richieste di modifica e annullamento, prive di effetti automatici fino all'approvazione; date, orari, sede, veicolo e dati vengono applicati tramite il flusso transazionale esistente.
+- Creato `GWR_Notification_Service` con eventi centralizzati, template HTML/testo configurabili, allowlist token, mittente sicuro, coda, idempotenza, retry con backoff e log destinatari mascherati.
+- Unificati scadenza prenotazioni, riconciliazione pagamenti, promemoria pagamento/ritiro/riconsegna e pulizia in un singolo evento WP-Cron con lock e batch.
+- Create le tabelle `gwr_customer_requests`, `gwr_notification_queue` e `gwr_notification_logs`; estese prenotazioni e allegati con metadati token e verifica documenti tramite migrazioni idempotenti.
+- Aggiornati pannelli amministrativi Prenotazioni, Documenti e Comunicazioni e preparato il rilascio GitHub con asset `gest-web-rent.zip`.
+
 ## 1.8.0
 
 - Aggiunto motore documentale per riepilogo prenotazione, conferma, voucher, contratto, verbale consegna, verbale riconsegna, riepilogo pagamenti e conferma annullamento.

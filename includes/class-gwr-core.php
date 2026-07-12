@@ -24,6 +24,9 @@ class GWR_Core {
 		GWR_Payment_Service::init();
 		GWR_Document_Service::init();
 		GWR_Attachment_Service::init();
+		GWR_Notification_Service::init();
+		GWR_Customer_Request_Service::init();
+		GWR_Customer_Portal::init();
 		GWR_Admin::init();
 		GWR_Rental_Terms_Admin::init();
 		GWR_Bookings_Admin::init();
@@ -62,6 +65,8 @@ class GWR_Core {
 		GWR_Payment_Service::create_tables();
 		GWR_Document_Service::create_tables();
 		GWR_Attachment_Service::create_tables();
+		GWR_Notification_Service::create_tables();
+		GWR_Customer_Request_Service::create_tables();
 		GWR_CPT::maybe_migrate_cpt_vehicles();
 		update_option( 'gwr_db_version', GWR_CPT::DB_VERSION, false );
 		update_option( GWR_Pricing_Service::DB_OPTION, GWR_Pricing_Service::DB_VERSION, false );
@@ -69,6 +74,8 @@ class GWR_Core {
 		update_option( GWR_Payment_Service::DB_OPTION, GWR_Payment_Service::DB_VERSION, false );
 		update_option( GWR_Document_Service::DB_OPTION, GWR_Document_Service::DB_VERSION, false );
 		update_option( GWR_Attachment_Service::DB_OPTION, GWR_Attachment_Service::DB_VERSION, false );
+		update_option( GWR_Notification_Service::DB_OPTION, GWR_Notification_Service::DB_VERSION, false );
+		update_option( GWR_Customer_Request_Service::DB_OPTION, GWR_Customer_Request_Service::DB_VERSION, false );
 
 		if ( false === get_option( GWR_Admin::OPTION_NAME, false ) ) {
 			add_option( GWR_Admin::OPTION_NAME, GWR_Admin::default_settings(), '', false );
@@ -85,6 +92,9 @@ class GWR_Core {
 		if ( false === get_option( GWR_Document_Service::OPTION_NAME, false ) ) {
 			add_option( GWR_Document_Service::OPTION_NAME, GWR_Document_Service::default_settings(), '', false );
 		}
+		if ( false === get_option( GWR_Notification_Service::OPTION_NAME, false ) ) {
+			add_option( GWR_Notification_Service::OPTION_NAME, GWR_Notification_Service::defaults(), '', false );
+		}
 
 		flush_rewrite_rules();
 	}
@@ -97,6 +107,7 @@ class GWR_Core {
 	public static function deactivate() {
 		wp_clear_scheduled_hook( 'gwr_expire_pending_bookings' );
 		wp_clear_scheduled_hook( 'gwr_reconcile_payments' );
+		wp_clear_scheduled_hook( GWR_Notification_Service::CRON_HOOK );
 		flush_rewrite_rules();
 	}
 }

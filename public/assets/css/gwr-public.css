@@ -2067,3 +2067,91 @@ body.gwr-modal-open {
   .gwr-payment-status.is-loading [data-gwr-payment-message]::after { animation: none; content: "..."; }
   .gwr-vehicle-card, .gwr-category-shortcut, .gwr-sidebar-section__toggle > span:last-child, .gwr-config-section h3 i, .gwr-config-price-detail button i { transition: none; }
 }
+
+/* Secure customer portal. */
+.gwr-customer-portal {
+  --gwr-portal-border: #dfe4ec;
+  --gwr-portal-surface: #f5f7fa;
+  box-sizing: border-box;
+  color: #172033;
+  margin: 32px auto;
+  max-width: 1180px;
+  padding: 0 20px 48px;
+}
+.gwr-customer-portal *, .gwr-customer-portal *::before, .gwr-customer-portal *::after { box-sizing: border-box; }
+.gwr-portal-header { align-items: center; border-bottom: 1px solid var(--gwr-portal-border); display: flex; gap: 24px; justify-content: space-between; padding: 28px 0; }
+.gwr-portal-header h1 { font-size: clamp(1.7rem, 4vw, 2.5rem); letter-spacing: 0; margin: 4px 0; }
+.gwr-portal-header p, .gwr-portal-header span { color: #5b6474; margin: 0; }
+.gwr-portal-status { border-left: 4px solid #617089; max-width: 360px; padding: 10px 14px; }
+.gwr-portal-status strong, .gwr-portal-status span { display: block; }
+.gwr-portal-status.is-success { border-color: #24845f; }
+.gwr-portal-status.is-warning { border-color: #c17a19; }
+.gwr-portal-status.is-danger { border-color: #b63b48; }
+.gwr-portal-layout { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr) 270px; padding-top: 24px; }
+.gwr-portal-main, .gwr-portal-side { display: grid; gap: 18px; min-width: 0; }
+.gwr-portal-side { align-content: start; }
+.gwr-portal-section, .gwr-portal-actions, .gwr-portal-support, .gwr-portal-access { background: #fff; border: 1px solid var(--gwr-portal-border); border-radius: 6px; padding: 22px; }
+.gwr-portal-section__head { align-items: center; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 18px; }
+.gwr-portal-section h2, .gwr-portal-actions h2, .gwr-portal-support h2 { font-size: 1.18rem; letter-spacing: 0; margin: 0; }
+.gwr-portal-trip__body { display: grid; gap: 20px; grid-template-columns: minmax(180px, 260px) 1fr; }
+.gwr-portal-trip__body img { aspect-ratio: 3 / 2; border-radius: 4px; height: 100%; object-fit: cover; width: 100%; }
+.gwr-portal-trip dl, .gwr-portal-money, .gwr-portal-bank dl { display: grid; gap: 12px; margin: 0; }
+.gwr-portal-trip dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gwr-portal-trip dt, .gwr-portal-money span, .gwr-portal-bank dt { color: #667084; font-size: .82rem; }
+.gwr-portal-trip dd, .gwr-portal-bank dd { font-weight: 650; margin: 3px 0 0; overflow-wrap: anywhere; }
+.gwr-portal-items, .gwr-document-checklist { border-top: 1px solid var(--gwr-portal-border); list-style: none; margin: 18px 0 0; padding: 12px 0 0; }
+.gwr-portal-items li, .gwr-document-checklist li { align-items: center; display: flex; gap: 12px; justify-content: space-between; min-height: 42px; }
+.gwr-portal-timeline { display: grid; gap: 0; list-style: none; margin: 0; padding: 0; }
+.gwr-portal-timeline li { display: grid; gap: 12px; grid-template-columns: 18px 1fr; min-height: 58px; position: relative; }
+.gwr-portal-timeline li > span { background: #fff; border: 3px solid var(--gwr-primary, #173787); border-radius: 50%; height: 14px; margin-top: 4px; width: 14px; z-index: 1; }
+.gwr-portal-timeline li:not(:last-child)::before { background: #ccd3df; content: ''; height: 100%; left: 6px; position: absolute; top: 12px; width: 2px; }
+.gwr-portal-timeline strong, .gwr-portal-timeline time { display: block; }
+.gwr-portal-timeline time { color: #667084; font-size: .84rem; margin-top: 3px; }
+.gwr-portal-money { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.gwr-portal-money > div { background: var(--gwr-portal-surface); border-radius: 4px; padding: 14px; }
+.gwr-portal-money strong { display: block; font-size: 1.08rem; margin-top: 4px; }
+.gwr-portal-payment-action, .gwr-portal-bank { border-top: 1px solid var(--gwr-portal-border); margin-top: 18px; padding-top: 18px; }
+.gwr-portal-bank h3 { font-size: 1rem; margin: 0 0 12px; }
+.gwr-portal-bank dl > div { align-items: center; display: grid; gap: 12px; grid-template-columns: 110px 1fr; }
+.gwr-portal-bank dd { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+.gwr-copy-button { background: transparent; border: 1px solid #b9c2d0; border-radius: 4px; cursor: pointer; min-height: 36px; padding: 5px 10px; }
+.gwr-portal-documents, .gwr-portal-requests { display: grid; gap: 10px; }
+.gwr-portal-documents article, .gwr-portal-requests article { align-items: center; border-bottom: 1px solid var(--gwr-portal-border); display: flex; gap: 14px; justify-content: space-between; padding: 10px 0; }
+.gwr-portal-documents article:last-child, .gwr-portal-requests article:last-child { border-bottom: 0; }
+.gwr-portal-documents strong, .gwr-portal-documents span, .gwr-portal-requests strong, .gwr-portal-requests time { display: block; }
+.gwr-portal-documents span, .gwr-portal-requests time { color: #667084; font-size: .82rem; }
+.gwr-portal-upload, .gwr-portal-request-form form, .gwr-portal-form { display: grid; gap: 14px; margin-top: 16px; }
+.gwr-portal-upload label, .gwr-portal-request-form label, .gwr-portal-form label { display: grid; gap: 6px; }
+.gwr-portal-upload input, .gwr-portal-request-form input, .gwr-portal-request-form select, .gwr-portal-request-form textarea, .gwr-portal-form input { border: 1px solid #aeb8c8; border-radius: 4px; font: inherit; min-height: 44px; padding: 9px 11px; width: 100%; }
+.gwr-portal-request-form { border-top: 1px solid var(--gwr-portal-border); margin-top: 18px; padding-top: 14px; }
+.gwr-portal-request-form summary { cursor: pointer; font-weight: 700; min-height: 44px; padding: 10px 0; }
+.gwr-portal-request-form.is-cancellation summary { color: #9b2f3b; }
+.gwr-portal-proposed-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gwr-portal-actions, .gwr-portal-support { display: grid; gap: 10px; }
+.gwr-portal-actions a, .gwr-portal-support a { justify-content: center; min-height: 44px; text-align: center; }
+.gwr-portal-access { margin: 48px auto; max-width: 620px; }
+.gwr-portal-access h1 { font-size: 2rem; letter-spacing: 0; margin: 6px 0 12px; }
+.gwr-portal-notice { background: #eaf6f0; border-left: 4px solid #24845f; margin: 14px 0; padding: 12px 14px; }
+.gwr-portal-notice.is-error { background: #fff0f1; border-color: #b63b48; }
+.gwr-honeypot { height: 0; left: -10000px; overflow: hidden; position: absolute; width: 0; }
+
+@media (max-width: 860px) {
+  .gwr-portal-layout { grid-template-columns: 1fr; }
+  .gwr-portal-side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gwr-portal-money { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .gwr-customer-portal { margin: 12px auto; padding: 0 12px 32px; }
+  .gwr-portal-header { align-items: stretch; flex-direction: column; }
+  .gwr-portal-status { max-width: none; }
+  .gwr-portal-section, .gwr-portal-actions, .gwr-portal-support, .gwr-portal-access { padding: 16px; }
+  .gwr-portal-trip__body, .gwr-portal-trip dl, .gwr-portal-side, .gwr-portal-proposed-grid { grid-template-columns: 1fr; }
+  .gwr-portal-trip__body img { height: auto; }
+  .gwr-portal-documents article, .gwr-portal-requests article { align-items: stretch; flex-direction: column; }
+  .gwr-portal-documents a, .gwr-payment-status__actions button, .gwr-portal-upload button, .gwr-portal-request-form button { justify-content: center; min-height: 44px; width: 100%; }
+  .gwr-portal-bank dl > div { grid-template-columns: 1fr; }
+}
+@media (max-width: 360px) {
+  .gwr-portal-money { grid-template-columns: 1fr; }
+  .gwr-portal-header h1 { font-size: 1.55rem; overflow-wrap: anywhere; }
+}

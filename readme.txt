@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.8.0
+Stable tag: 1.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,8 @@ Funzionalita principali:
 * Area amministrativa per tariffe, coupon, impostazioni Stripe, pagamenti, webhook e rimborsi.
 * Documenti professionali di prenotazione con voucher, conferme, contratti, verbali e riepiloghi.
 * Download protetti, snapshot versionati, firme semplici, allegati pratica e portale cliente.
+* Area cliente sicura con recupero link, stato, timeline, pagamenti, documenti, upload e richieste.
+* Comunicazioni centralizzate con template, coda idempotente, retry, log e promemoria WP-Cron.
 * Gestione amministrativa di stato, cronologia, consegna, riconsegna e stampa.
 * Foto veicolo tramite Media Library.
 * Indisponibilita per date in tabella custom.
@@ -73,6 +75,15 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 1.9.0 =
+* Completata area cliente con token hash, rotazione/revoca, recupero link neutro, no-store e noindex.
+* Aggiunti riepilogo prenotazione, timeline, pagato/saldo/deposito, retry Stripe e istruzioni bonifico.
+* Aggiunti documenti autorizzati, upload cliente protetti, checklist e verifica amministrativa.
+* Aggiunte richieste di modifica e annullamento con approvazione amministrativa controllata.
+* Aggiunto servizio notifiche centralizzato con template, token consentiti, coda, log, idempotenza e retry.
+* Unificati scadenze, riconciliazione pagamenti e promemoria in un singolo evento WP-Cron.
+* Aggiunte tabelle `gwr_customer_requests`, `gwr_notification_queue` e `gwr_notification_logs` con migrazioni idempotenti.
 
 = 1.8.0 =
 * Aggiunto motore documentale per riepilogo prenotazione, conferma, voucher, contratto, verbale consegna, verbale riconsegna, riepilogo pagamenti e conferma annullamento.

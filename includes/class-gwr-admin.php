@@ -82,6 +82,7 @@ class GWR_Admin {
 		add_submenu_page( 'gest-web-rent', __( 'Prenotazioni', 'gest-web-rent' ), __( 'Prenotazioni', 'gest-web-rent' ), 'manage_options', 'gwr-bookings', array( 'GWR_Bookings_Admin', 'list_page' ) );
 		add_submenu_page( null, __( 'Dettaglio prenotazione', 'gest-web-rent' ), __( 'Dettaglio prenotazione', 'gest-web-rent' ), 'manage_options', 'gwr-booking-detail', array( 'GWR_Bookings_Admin', 'detail_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Documenti', 'gest-web-rent' ), __( 'Documenti', 'gest-web-rent' ), 'manage_options', 'gwr-documents', array( 'GWR_Documents_Admin', 'page' ) );
+		add_submenu_page( 'gest-web-rent', __( 'Comunicazioni', 'gest-web-rent' ), __( 'Comunicazioni', 'gest-web-rent' ), 'manage_options', 'gwr-communications', array( 'GWR_Notification_Service', 'admin_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Condizioni di noleggio', 'gest-web-rent' ), __( 'Condizioni di noleggio', 'gest-web-rent' ), 'manage_options', 'gwr-rental-terms', array( 'GWR_Rental_Terms_Admin', 'page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Impostazioni', 'gest-web-rent' ), __( 'Impostazioni', 'gest-web-rent' ), 'manage_options', 'gwr-settings', array( __CLASS__, 'settings_page' ) );
 	}
@@ -741,6 +742,7 @@ class GWR_Admin {
 			'availability' => array( 'label' => __( 'Disponibilita', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-availability' ) ),
 			'bookings'     => array( 'label' => __( 'Prenotazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-bookings' ) ),
 			'documents'    => array( 'label' => __( 'Documenti', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-documents' ) ),
+			'communications' => array( 'label' => __( 'Comunicazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-communications' ) ),
 			'pricing'      => array( 'label' => __( 'Tariffe', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-pricing' ) ),
 			'payments'     => array( 'label' => __( 'Pagamenti', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-payments' ) ),
 			'terms'        => array( 'label' => __( 'Condizioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-rental-terms' ) ),

@@ -12,6 +12,8 @@ if command -v rsync >/dev/null 2>&1; then
   rsync -av \
     --exclude='.git' \
     --exclude='.github' \
+    --exclude='.agents' \
+    --exclude='.codex' \
     --exclude='.gitattributes' \
     --exclude='.gitignore' \
     --exclude='.gitkeep' \
@@ -33,7 +35,7 @@ else
   for item in ./*; do
     base="$(basename "${item}")"
     case "${base}" in
-      .git|.github|.gitattributes|.gitignore|.gitkeep|build|scripts|blocks|node_modules|vendor|.env|.env.*|.DS_Store|*.zip|*.log|*.tmp)
+      .git|.github|.agents|.codex|.gitattributes|.gitignore|.gitkeep|build|scripts|blocks|node_modules|vendor|.env|.env.*|.DS_Store|*.zip|*.log|*.tmp)
         continue
         ;;
     esac

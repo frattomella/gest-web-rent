@@ -1600,6 +1600,17 @@
   function boot() {
     qsa(document, '[data-gwr-catalog]').forEach(initCatalog);
     qsa(document, '[data-gwr-payment-status]').forEach(initPaymentStatus);
+    qsa(document, '[data-gwr-copy]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var value = button.getAttribute('data-gwr-copy') || '';
+        if (!value || !navigator.clipboard) return;
+        navigator.clipboard.writeText(value).then(function () {
+          var original = button.textContent;
+          button.textContent = 'Copiato';
+          window.setTimeout(function () { button.textContent = original; }, 1500);
+        });
+      });
+    });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

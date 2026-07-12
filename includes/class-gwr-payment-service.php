@@ -22,14 +22,9 @@ class GWR_Payment_Service {
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'maybe_upgrade' ), 6 );
 		add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
-		add_action( 'gwr_reconcile_payments', array( __CLASS__, 'reconcile_pending_payments' ) );
 		add_action( 'admin_post_gwr_reconcile_payments', array( __CLASS__, 'handle_reconcile' ) );
 		add_action( 'admin_post_gwr_refund_payment', array( __CLASS__, 'handle_refund' ) );
 		add_action( 'admin_post_gwr_mark_bank_transfer', array( __CLASS__, 'handle_mark_bank_transfer' ) );
-
-		if ( ! wp_next_scheduled( 'gwr_reconcile_payments' ) ) {
-			wp_schedule_event( time() + ( 30 * MINUTE_IN_SECONDS ), 'hourly', 'gwr_reconcile_payments' );
-		}
 	}
 
 	/**
@@ -268,6 +263,14 @@ class GWR_Payment_Service {
 		}
 
 		return self::start_payment_for_booking( $booking, $method );
+	}
+
+	/** Invalidate open checkout attempts after an approved booking change. */
+	public static function invalidate_open_attempts( $booking_id ) {
+		global $wpdb;
+		$result = $wpdb->query( $wpdb->prepare( 'UPDATE ' . self::table() . " SET status='expired',failure_message=%s,updated_at=%s WHERE booking_id=%d AND status IN ('created','pending','processing')", __( 'Tentativo invalidato dopo modifica prenotazione.', 'gest-web-rent' ), current_time( 'mysql' ), absint( $booking_id ) ) );
+		if ( $result ) { GWR_Bookings::add_system_log( $booking_id, 'payment_attempts_invalidated', __( 'Sessioni di pagamento aperte invalidate.', 'gest-web-rent' ) ); }
+		return false !== $result;
 	}
 
 	/**
@@ -627,6 +630,7 @@ class GWR_Payment_Service {
 		);
 		GWR_Bookings::sync_payment_status( $payment['booking_id'], 'paid', $payment['provider'], 'confirmed', __( 'Pagamento confermato.', 'gest-web-rent' ) );
 		GWR_Coupon_Service::mark_used_by_booking( $payment['booking_id'] );
+		if ( class_exists( 'GWR_Notification_Service' ) ) { GWR_Notification_Service::send_event( GWR_Bookings::get( $payment['booking_id'] ), 'payment_succeeded', array( 'reference' => 'payment:' . $payment['id'] . ':paid' ) ); }
 	}
 
 	private static function mark_payment_failed( $payment_id, $code, $message ) {
@@ -634,6 +638,7 @@ class GWR_Payment_Service {
 		self::update_payment( $payment_id, array( 'status' => 'failed', 'failure_code' => sanitize_key( $code ), 'failure_message' => sanitize_text_field( $message ), 'failed_at' => current_time( 'mysql' ) ) );
 		if ( $payment ) {
 			GWR_Bookings::sync_payment_status( $payment['booking_id'], 'failed', $payment['provider'], 'payment_failed', __( 'Pagamento non completato. Il cliente puo riprovare.', 'gest-web-rent' ) );
+			if ( class_exists( 'GWR_Notification_Service' ) ) { GWR_Notification_Service::send_event( GWR_Bookings::get( $payment['booking_id'] ), 'payment_failed', array( 'reference' => 'payment:' . $payment['id'] . ':failed' ) ); }
 		}
 	}
 
@@ -653,6 +658,7 @@ class GWR_Payment_Service {
 		$status = $refunded >= absint( $payment['amount'] ) ? 'refunded' : 'partially_refunded';
 		self::update_payment( $payment['id'], array( 'status' => $status, 'amount_refunded' => $refunded, 'provider_charge_id' => sanitize_text_field( $object['id'] ?? $payment['provider_charge_id'] ), 'refunded_at' => current_time( 'mysql' ) ) );
 		GWR_Bookings::sync_payment_status( $payment['booking_id'], $status, $payment['provider'], 'refunded' === $status ? 'refunded' : null, __( 'Rimborso registrato da Stripe.', 'gest-web-rent' ) );
+		if ( class_exists( 'GWR_Notification_Service' ) ) { GWR_Notification_Service::send_event( GWR_Bookings::get( $payment['booking_id'] ), 'refunded' === $status ? 'payment_refunded' : 'payment_partially_refunded', array( 'reference' => 'payment:' . $payment['id'] . ':refund:' . $refunded ) ); }
 	}
 
 	private static function mark_manual_refund( $payment, $amount, $reason ) {
@@ -665,6 +671,7 @@ class GWR_Payment_Service {
 		$status = $new_refunded >= absint( $payment['amount'] ) ? 'refunded' : 'partially_refunded';
 		self::update_payment( $payment['id'], array( 'status' => $status, 'amount_refunded' => $new_refunded, 'provider_refund_id' => sanitize_text_field( $refund_id ), 'refunded_at' => current_time( 'mysql' ) ) );
 		GWR_Bookings::sync_payment_status( $payment['booking_id'], $status, $payment['provider'], 'refunded' === $status ? 'refunded' : null, __( 'Rimborso registrato.', 'gest-web-rent' ) );
+		if ( class_exists( 'GWR_Notification_Service' ) ) { GWR_Notification_Service::send_event( GWR_Bookings::get( $payment['booking_id'] ), 'refunded' === $status ? 'payment_refunded' : 'payment_partially_refunded', array( 'reference' => 'payment:' . $payment['id'] . ':refund:' . $new_refunded ) ); }
 	}
 
 	private static function update_payment( $payment_id, $data ) {

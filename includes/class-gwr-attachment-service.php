@@ -11,7 +11,7 @@ defined( 'ABSPATH' ) || exit;
  * Handles private booking attachments.
  */
 class GWR_Attachment_Service {
-	const DB_VERSION = '1.8.0';
+	const DB_VERSION = '1.9.0';
 	const DB_OPTION = 'gwr_attachments_db_version';
 
 	/**
@@ -22,7 +22,10 @@ class GWR_Attachment_Service {
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'maybe_upgrade' ), 6 );
 		add_action( 'admin_post_gwr_booking_attachment_upload', array( __CLASS__, 'handle_upload' ) );
+		add_action( 'admin_post_gwr_customer_attachment_upload', array( __CLASS__, 'handle_customer_upload' ) );
+		add_action( 'admin_post_nopriv_gwr_customer_attachment_upload', array( __CLASS__, 'handle_customer_upload' ) );
 		add_action( 'admin_post_gwr_booking_attachment_delete', array( __CLASS__, 'handle_delete' ) );
+		add_action( 'admin_post_gwr_booking_attachment_verify', array( __CLASS__, 'handle_verify' ) );
 		add_action( 'admin_post_gwr_booking_attachment_download', array( __CLASS__, 'handle_download' ) );
 		add_action( 'admin_post_nopriv_gwr_booking_attachment_download', array( __CLASS__, 'handle_download' ) );
 	}
@@ -56,6 +59,8 @@ class GWR_Attachment_Service {
 			file_size bigint(20) unsigned NOT NULL DEFAULT 0,
 			description varchar(255) NULL,
 			visibility varchar(32) NOT NULL DEFAULT 'private',
+			verification_status varchar(32) NOT NULL DEFAULT 'pending',
+			source varchar(32) NOT NULL DEFAULT 'admin',
 			uploaded_by bigint(20) unsigned NULL,
 			created_at datetime NOT NULL,
 			deleted_at datetime NULL,
@@ -159,6 +164,31 @@ class GWR_Attachment_Service {
 		self::redirect_to_booking( $booking_id, $result, __( 'Allegato caricato.', 'gest-web-rent' ) );
 	}
 
+	/** Secure upload from the customer portal. */
+	public static function handle_customer_upload() {
+		global $wpdb;
+		$code = sanitize_text_field( wp_unslash( $_POST['booking_code'] ?? '' ) );
+		$token = sanitize_text_field( wp_unslash( $_POST['gwr_token'] ?? '' ) );
+		$booking_id = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . GWR_Bookings::table() . ' WHERE booking_code=%s', $code ) );
+		$booking = $booking_id ? GWR_Bookings::get( $booking_id ) : null;
+		if ( ! $booking || ! GWR_Bookings::verify_public_token( $booking, $token ) ) {
+			wp_die( esc_html__( 'Accesso prenotazione non valido.', 'gest-web-rent' ), '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'gwr_customer_attachment_upload_' . $booking_id, 'gwr_upload_nonce' );
+		$ip = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? 'unknown' );
+		$rate_key = 'gwr_upload_rate_' . substr( hash_hmac( 'sha256', $ip . '|' . $booking_id, wp_salt( 'nonce' ) ), 0, 32 );
+		$count = absint( get_transient( $rate_key ) );
+		if ( $count >= 10 ) { $result = new WP_Error( 'gwr_upload_rate', __( 'Limite upload raggiunto. Riprova piu tardi.', 'gest-web-rent' ) ); }
+		else {
+			set_transient( $rate_key, $count + 1, HOUR_IN_SECONDS );
+			$active_count = count( self::attachments_for_booking( $booking_id, true ) );
+			$result = $active_count >= 20 ? new WP_Error( 'gwr_upload_count', __( 'Numero massimo di allegati raggiunto.', 'gest-web-rent' ) ) : self::upload( $booking_id, $_FILES['gwr_attachment_file'] ?? array(), array( 'description' => sanitize_text_field( wp_unslash( $_POST['description'] ?? __( 'Documento cliente', 'gest-web-rent' ) ) ), 'visibility' => 'private', 'source' => 'customer' ) );
+		}
+		$message = is_wp_error( $result ) ? $result->get_error_message() : __( 'Documento inviato e in attesa di verifica.', 'gest-web-rent' );
+		$url = add_query_arg( array( 'booking_code' => $code, 'gwr_token' => $token, 'gwr_portal_message' => rawurlencode( $message ), 'gwr_portal_error' => is_wp_error( $result ) ? 1 : 0 ), wp_get_referer() ?: home_url( '/prenotazione/' ) );
+		wp_safe_redirect( $url ); exit;
+	}
+
 	/**
 	 * Soft-delete handler.
 	 *
@@ -171,6 +201,20 @@ class GWR_Attachment_Service {
 		$attachment = self::get( $attachment_id );
 		$result = self::delete( $attachment_id );
 		self::redirect_to_booking( $attachment['booking_id'] ?? 0, $result, __( 'Allegato eliminato.', 'gest-web-rent' ) );
+	}
+
+	public static function handle_verify() {
+		self::require_admin();
+		$attachment_id = absint( $_GET['attachment_id'] ?? 0 );
+		check_admin_referer( 'gwr_booking_attachment_verify_' . $attachment_id );
+		$attachment = self::get( $attachment_id );
+		$status = sanitize_key( $_GET['verification_status'] ?? '' );
+		if ( $attachment && in_array( $status, array( 'pending', 'reviewing', 'approved', 'rejected' ), true ) ) {
+			global $wpdb; $wpdb->update( self::table(), array( 'verification_status' => $status ), array( 'id' => $attachment_id ) );
+			GWR_Bookings::add_system_log( $attachment['booking_id'], 'attachment_' . $status, $attachment['description'] );
+			if ( 'rejected' === $status && class_exists( 'GWR_Notification_Service' ) ) { GWR_Notification_Service::send_event( GWR_Bookings::get( $attachment['booking_id'] ), 'document_rejected', array( 'reference' => 'attachment:' . $attachment_id . ':rejected' ) ); }
+		}
+		self::redirect_to_booking( $attachment['booking_id'] ?? 0, (bool) $attachment, __( 'Stato allegato aggiornato.', 'gest-web-rent' ) );
 	}
 
 	/**
@@ -233,6 +277,10 @@ class GWR_Attachment_Service {
 		if ( empty( $checked['ext'] ) || empty( $checked['type'] ) ) {
 			return new WP_Error( 'gwr_attachment_type_invalid', __( 'Sono ammessi solo PDF, JPG e PNG.', 'gest-web-rent' ) );
 		}
+		$sample = file_get_contents( $file['tmp_name'], false, null, 0, 4096 );
+		if ( false === $sample || preg_match( '/<\?(?:php|=)|<script|__halt_compiler|^MZ/i', $sample ) ) {
+			return new WP_Error( 'gwr_attachment_content_invalid', __( 'Il contenuto del file non e sicuro.', 'gest-web-rent' ) );
+		}
 		$dir = GWR_PDF_Service::storage_dir();
 		if ( is_wp_error( $dir ) ) {
 			return $dir;
@@ -254,6 +302,8 @@ class GWR_Attachment_Service {
 				'file_size' => absint( filesize( $path ) ),
 				'description' => sanitize_text_field( wp_unslash( $raw['description'] ?? '' ) ),
 				'visibility' => $visibility,
+				'verification_status' => 'customer' === sanitize_key( $raw['source'] ?? '' ) ? 'pending' : 'approved',
+				'source' => 'customer' === sanitize_key( $raw['source'] ?? '' ) ? 'customer' : 'admin',
 				'uploaded_by' => get_current_user_id(),
 				'created_at' => current_time( 'mysql' ),
 			)

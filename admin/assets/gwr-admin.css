@@ -973,3 +973,13 @@
     font-size: 28px;
   }
 }
+.gwr-communication-template { border-top: 1px solid #dcdcde; padding: 10px 0; }
+.gwr-communication-template summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+.gwr-communication-template .gwr-field { margin-top: 12px; }
+.gwr-customer-requests { display: grid; gap: 14px; }
+.gwr-customer-request { border-top: 1px solid #dcdcde; padding-top: 14px; }
+.gwr-customer-request header { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
+.gwr-customer-request dl { display: grid; grid-template-columns: minmax(120px, .3fr) 1fr; margin: 12px 0; }
+.gwr-customer-request dt, .gwr-customer-request dd { border-bottom: 1px solid #eef0f2; margin: 0; padding: 7px; }
+.gwr-customer-request form { display: grid; gap: 10px; }
+.gwr-customer-request textarea { width: 100%; }

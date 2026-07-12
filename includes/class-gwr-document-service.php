@@ -727,7 +727,7 @@ class GWR_Document_Service {
 		if ( ! empty( $document['file_path'] ) && GWR_PDF_Service::is_path_allowed( $document['file_path'] ) && file_exists( $document['file_path'] ) ) {
 			$attachments[] = $document['file_path'];
 		}
-		$sent = wp_mail( $booking['customer_email'], $subject, $body, array( 'Content-Type: text/html; charset=UTF-8' ), $attachments );
+		$sent = class_exists( 'GWR_Notification_Service' ) ? GWR_Notification_Service::send_custom( $booking, $subject, $body, $attachments, 'document_available' ) : false;
 		$wpdb->insert(
 			self::email_logs_table(),
 			array(

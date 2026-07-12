@@ -48,6 +48,10 @@ Sottomenu:
 - Aggiungi veicolo
 - Disponibilita
 - Prenotazioni
+- Documenti
+- Tariffe
+- Pagamenti
+- Comunicazioni
 - Condizioni di noleggio
 - Impostazioni
 
@@ -78,7 +82,7 @@ Vai in **Gest Web Rent > Condizioni di noleggio** per configurare i valori globa
 
 Nel form di modifica del veicolo la sezione **Condizioni di noleggio** permette di ereditare ogni gruppo globale oppure conservarne una versione personalizzata. Gli extra possono essere associati a tutti i veicoli, a specifici ID o a categorie veicolo.
 
-Le quantita degli extra sono informative: il controllo della disponibilita reale richiedera il futuro modulo prenotazioni e non viene simulato in questa versione.
+Le selezioni di extra e coperture entrano nel calcolo server-side e nello snapshot della prenotazione.
 
 ## Prenotazioni
 
@@ -88,7 +92,13 @@ Le richieste vengono salvate in `wp_gwr_bookings`, con righe economiche in `wp_g
 
 L area **Gest Web Rent > Prenotazioni** permette ricerca, filtri, paginazione, modifica controllata, transizioni di stato, consegna, riconsegna e stampa. Le richieste in attesa scadono secondo il valore configurato in Impostazioni e liberano il veicolo tramite WP-Cron.
 
-Questa versione non include gateway di pagamento, account cliente, fatturazione o annullamento self-service. La quantita extra resta informativa finche non esistera un inventario prenotabile dedicato.
+La pagina con shortcode `[gwr_booking_portal]` offre un'area cliente protetta per stato, timeline, pagamenti, documenti, upload e richieste di modifica o annullamento. Le richieste non cambiano direttamente una prenotazione confermata e richiedono approvazione amministrativa.
+
+## Area Cliente E Comunicazioni
+
+Il link cliente usa codice prenotazione e token casuale; nel database viene salvato soltanto l'hash. Il modulo di recupero invia un nuovo link con risposta pubblica neutra, rate limiting e rotazione del token.
+
+La pagina **Gest Web Rent > Comunicazioni** gestisce mittente, template email, promemoria e coda. Un singolo evento WP-Cron processa batch limitati, retry e attività periodiche. WhatsApp usa esclusivamente link `wa.me` quando il numero è configurato.
 
 ## Foto Veicolo
 
@@ -187,5 +197,5 @@ Ogni release deve aggiornare:
 Release corrente:
 
 ```text
-1.6.0
+1.9.0
 ```

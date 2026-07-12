@@ -77,6 +77,8 @@ class GWR_Bookings_Admin {
 		self::people_section( $booking );
 		self::snapshot_section( $booking );
 		GWR_Documents_Admin::booking_documents_panel( $booking );
+		GWR_Customer_Request_Service::admin_panel( $booking );
+		GWR_Notification_Service::booking_panel( $booking );
 		self::operations_section( $booking );
 		self::logs_section( $logs );
 		echo '</main><aside class="gwr-booking-detail-side">';

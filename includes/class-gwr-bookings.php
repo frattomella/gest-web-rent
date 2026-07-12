@@ -9,16 +9,12 @@ defined( 'ABSPATH' ) || exit;
 
 /** Central booking domain service. */
 class GWR_Bookings {
-	const DB_VERSION = '1.7.0';
+	const DB_VERSION = '1.9.0';
 	const DB_OPTION  = 'gwr_bookings_db_version';
 
 	/** Register runtime hooks. */
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'maybe_upgrade' ), 6 );
-		add_action( 'gwr_expire_pending_bookings', array( __CLASS__, 'expire_pending' ) );
-		if ( ! wp_next_scheduled( 'gwr_expire_pending_bookings' ) ) {
-			wp_schedule_event( time() + HOUR_IN_SECONDS, 'hourly', 'gwr_expire_pending_bookings' );
-		}
 	}
 
 	/** Booking table. */
@@ -84,6 +80,8 @@ class GWR_Bookings {
 			pricing_snapshot_json longtext NULL,
 			public_token_hash varchar(128) NULL,
 			public_token_expires_at datetime NULL,
+			public_token_created_at datetime NULL,
+			public_token_revoked_at datetime NULL,
 			customer_type varchar(20) NOT NULL DEFAULT 'private',
 			customer_email varchar(190) NOT NULL,
 			customer_phone varchar(60) NOT NULL,
@@ -241,7 +239,8 @@ class GWR_Bookings {
 			$now = current_time( 'mysql' );
 			$expiry_hours = max( 1, min( 168, absint( $settings['pending_expiry_hours'] ?? 24 ) ) );
 			$provisional = 'TMP-' . wp_generate_uuid4();
-			$public_token = wp_generate_password( 32, false, false );
+			$public_token = self::generate_public_token();
+			$token_days = class_exists( 'GWR_Notification_Service' ) ? max( 1, min( 730, absint( GWR_Notification_Service::settings()['portal_token_days'] ?? 365 ) ) ) : 365;
 			$initial_status = self::initial_status_for_payment( $input['payment_method'], $price );
 			$initial_payment_status = ( ! empty( $price['pay_now_minor'] ) && in_array( $input['payment_method'], array( 'stripe', 'bank_transfer' ), true ) ) ? 'pending' : 'not_required';
 			$data = array(
@@ -268,7 +267,9 @@ class GWR_Bookings {
 				'payment_status' => $initial_payment_status,
 				'pricing_snapshot_json' => wp_json_encode( $price ),
 				'public_token_hash' => self::hash_public_token( $public_token ),
-				'public_token_expires_at' => ( new DateTimeImmutable( 'now', wp_timezone() ) )->modify( '+' . $expiry_hours . ' hours' )->format( 'Y-m-d H:i:s' ),
+				'public_token_expires_at' => ( new DateTimeImmutable( 'now', wp_timezone() ) )->modify( '+' . $token_days . ' days' )->format( 'Y-m-d H:i:s' ),
+				'public_token_created_at' => $now,
+				'public_token_revoked_at' => null,
 				'customer_type' => $input['customer']['customer_type'],
 				'customer_email' => $input['customer']['email'],
 				'customer_phone' => $input['customer']['phone'],
@@ -679,13 +680,44 @@ class GWR_Bookings {
 	 */
 	public static function verify_public_token( $booking, $token ) {
 		$booking = is_array( $booking ) ? $booking : self::get( absint( $booking ) );
-		if ( ! $booking || empty( $booking['public_token_hash'] ) || empty( $token ) ) {
+		if ( ! $booking || empty( $booking['public_token_hash'] ) || ! empty( $booking['public_token_revoked_at'] ) || empty( $token ) ) {
 			return false;
 		}
 		if ( ! empty( $booking['public_token_expires_at'] ) && $booking['public_token_expires_at'] < current_time( 'mysql' ) ) {
 			return false;
 		}
 		return hash_equals( $booking['public_token_hash'], self::hash_public_token( $token ) );
+	}
+
+	/** Rotate a customer token, storing only its HMAC. */
+	public static function rotate_public_token( $booking_id ) {
+		global $wpdb;
+		$booking = self::get( absint( $booking_id ) );
+		if ( ! $booking ) {
+			return new WP_Error( 'gwr_booking_missing', __( 'Prenotazione non trovata.', 'gest-web-rent' ) );
+		}
+		$token = self::generate_public_token();
+		$days = class_exists( 'GWR_Notification_Service' ) ? max( 1, min( 730, absint( GWR_Notification_Service::settings()['portal_token_days'] ?? 365 ) ) ) : 365;
+		$updated = $wpdb->update( self::table(), array(
+			'public_token_hash' => self::hash_public_token( $token ),
+			'public_token_created_at' => current_time( 'mysql' ),
+			'public_token_expires_at' => ( new DateTimeImmutable( 'now', wp_timezone() ) )->modify( '+' . $days . ' days' )->format( 'Y-m-d H:i:s' ),
+			'public_token_revoked_at' => null,
+			'updated_at' => current_time( 'mysql' ),
+		), array( 'id' => absint( $booking_id ) ) );
+		if ( false === $updated ) {
+			return new WP_Error( 'gwr_token_rotation_failed', __( 'Impossibile generare il link sicuro.', 'gest-web-rent' ) );
+		}
+		self::add_system_log( $booking_id, 'public_token_rotated', __( 'Link cliente rigenerato.', 'gest-web-rent' ) );
+		return $token;
+	}
+
+	/** Revoke portal access without deleting booking data. */
+	public static function revoke_public_token( $booking_id ) {
+		global $wpdb;
+		$result = $wpdb->update( self::table(), array( 'public_token_revoked_at' => current_time( 'mysql' ), 'updated_at' => current_time( 'mysql' ) ), array( 'id' => absint( $booking_id ) ) );
+		if ( false !== $result ) { self::add_system_log( $booking_id, 'public_token_revoked', __( 'Accesso cliente revocato.', 'gest-web-rent' ) ); }
+		return false !== $result;
 	}
 
 	/** Expire pending bookings and release blocks. */
@@ -716,37 +748,21 @@ class GWR_Bookings {
 		return true;
 	}
 
-	/** Send customer and administrator email after commit. */
+	/** Queue customer and administrator email after commit. */
 	public static function send_notifications( $booking ) {
-		if ( ! $booking ) { return; }
-		$settings = GWR_Admin::get_settings();
-		$status = self::statuses()[ $booking['status'] ] ?? $booking['status'];
-		$total = self::format_money( $booking['total_amount'], $booking['currency'] );
-		$period = self::format_datetime( $booking['pickup_datetime'] ) . ' - ' . self::format_datetime( $booking['return_datetime'] );
-		$item_names = array_map( function( $item ) { return $item['item_name']; }, self::items( $booking['id'] ) );
-		$snapshot_terms = $booking['snapshot']['rental_terms'] ?? array();
-		$essential = array_filter( array( ! empty( $snapshot_terms['fuel_policy']['type'] ) ? 'Carburante: ' . $snapshot_terms['fuel_policy']['type'] : '', ! empty( $snapshot_terms['mileage_policy']['type'] ) ? 'Chilometraggio: ' . $snapshot_terms['mileage_policy']['type'] : '' ) );
-		$body = '<h2>' . esc_html( sprintf( __( 'Richiesta di prenotazione %s', 'gest-web-rent' ), $booking['booking_code'] ) ) . '</h2><p>' . esc_html__( 'La richiesta e stata registrata ed e in attesa di conferma.', 'gest-web-rent' ) . '</p><table><tr><th>' . esc_html__( 'Veicolo', 'gest-web-rent' ) . '</th><td>' . esc_html( $booking['vehicle_title'] ) . '</td></tr><tr><th>' . esc_html__( 'Periodo', 'gest-web-rent' ) . '</th><td>' . esc_html( $period ) . '</td></tr><tr><th>' . esc_html__( 'Localita', 'gest-web-rent' ) . '</th><td>' . esc_html( $booking['pickup_location'] . ' - ' . $booking['return_location'] ) . '</td></tr><tr><th>' . esc_html__( 'Extra e coperture', 'gest-web-rent' ) . '</th><td>' . esc_html( $item_names ? implode( ', ', $item_names ) : __( 'Nessuno', 'gest-web-rent' ) ) . '</td></tr><tr><th>' . esc_html__( 'Deposito', 'gest-web-rent' ) . '</th><td>' . esc_html( self::format_money( $booking['deposit_amount'], $booking['currency'] ) ) . '</td></tr><tr><th>' . esc_html__( 'Stato', 'gest-web-rent' ) . '</th><td>' . esc_html( $status ) . '</td></tr><tr><th>' . esc_html__( 'Totale', 'gest-web-rent' ) . '</th><td>' . esc_html( $total ) . '</td></tr></table>' . ( $essential ? '<p>' . esc_html( implode( ' - ', $essential ) ) . '</p>' : '' ) . '<p>' . esc_html( $settings['privacy_note'] ?? '' ) . '</p>';
-		$headers = array( 'Content-Type: text/html; charset=UTF-8' );
-		$customer_sent = wp_mail( $booking['customer_email'], sprintf( __( 'Richiesta di prenotazione %s', 'gest-web-rent' ), $booking['booking_code'] ), $body, $headers );
-		self::add_log( $booking['id'], $customer_sent ? 'customer_email_sent' : 'customer_email_failed', $booking['status'], $booking['status'], '' );
-		$admin_email = sanitize_email( $settings['contact_email'] ?? get_option( 'admin_email' ) );
-		if ( $admin_email ) {
-			$customer_name = trim( ( $booking['customer']['first_name'] ?? '' ) . ' ' . ( $booking['customer']['last_name'] ?? '' ) );
-			$admin_url = admin_url( 'admin.php?page=gwr-booking-detail&booking_id=' . absint( $booking['id'] ) );
-			$admin_body = '<h2>' . esc_html__( 'Nuova prenotazione Gest Web Rent', 'gest-web-rent' ) . '</h2><p><strong>' . esc_html( $booking['booking_code'] ) . '</strong></p><p>' . esc_html( $customer_name . ' - ' . $booking['customer_email'] ) . '</p><p>' . esc_html( $booking['vehicle_title'] . ' - ' . $period . ' - ' . $total ) . '</p><p><a href="' . esc_url( $admin_url ) . '">' . esc_html__( 'Apri la prenotazione', 'gest-web-rent' ) . '</a></p>';
-			$admin_sent = wp_mail( $admin_email, sprintf( __( 'Nuova prenotazione %s', 'gest-web-rent' ), $booking['booking_code'] ), $admin_body, $headers );
-			self::add_log( $booking['id'], $admin_sent ? 'admin_email_sent' : 'admin_email_failed', $booking['status'], $booking['status'], '' );
-		}
+		if ( ! $booking || ! class_exists( 'GWR_Notification_Service' ) ) { return; }
+		$args = array( 'reference' => 'created:' . $booking['id'], 'booking_token' => $booking['public_token'] ?? '' );
+		GWR_Notification_Service::send_event( $booking, 'booking_created', $args );
+		$admin_email = sanitize_email( GWR_Admin::get_settings()['contact_email'] ?? get_option( 'admin_email' ) );
+		if ( $admin_email ) { $args['recipient'] = $admin_email; GWR_Notification_Service::send_event( $booking, 'booking_created', $args ); }
 	}
 
 	/** Send a concise customer status update after an admin transition. */
 	public static function send_status_notification( $booking ) {
-		if ( ! $booking || ! is_email( $booking['customer_email'] ) ) { return; }
-		$status = self::statuses()[ $booking['status'] ] ?? $booking['status'];
-		$body = '<h2>' . esc_html( sprintf( __( 'Aggiornamento prenotazione %s', 'gest-web-rent' ), $booking['booking_code'] ) ) . '</h2><p>' . esc_html( sprintf( __( 'La prenotazione ora risulta: %s.', 'gest-web-rent' ), $status ) ) . '</p><p>' . esc_html( $booking['vehicle_title'] . ' - ' . self::format_datetime( $booking['pickup_datetime'] ) . ' / ' . self::format_datetime( $booking['return_datetime'] ) ) . '</p>';
-		$sent = wp_mail( $booking['customer_email'], sprintf( __( 'Prenotazione %s: %s', 'gest-web-rent' ), $booking['booking_code'], $status ), $body, array( 'Content-Type: text/html; charset=UTF-8' ) );
-		self::add_log( $booking['id'], $sent ? 'status_email_sent' : 'status_email_failed', $booking['status'], $booking['status'], '' );
+		if ( ! $booking || ! class_exists( 'GWR_Notification_Service' ) ) { return; }
+		$events = array( 'pending' => 'booking_pending_confirmation', 'confirmed' => 'booking_confirmed', 'rejected' => 'booking_rejected', 'cancelled' => 'booking_cancelled', 'expired' => 'booking_expired', 'awaiting_payment' => 'payment_requested', 'payment_failed' => 'payment_failed', 'refunded' => 'payment_refunded' );
+		$event = $events[ $booking['status'] ] ?? '';
+		if ( $event ) { GWR_Notification_Service::send_event( $booking, $event, array( 'reference' => 'status:' . $booking['status'] . ':' . ( $booking['updated_at'] ?? '' ) ) ); }
 	}
 
 	/** Public display helpers. */
@@ -980,6 +996,11 @@ class GWR_Bookings {
 
 	private static function hash_public_token( $token ) {
 		return hash_hmac( 'sha256', (string) $token, wp_salt( 'auth' ) );
+	}
+
+	private static function generate_public_token() {
+		try { return bin2hex( random_bytes( 32 ) ); }
+		catch ( Exception $exception ) { return wp_generate_password( 64, false, false ); }
 	}
 
 	private static function sanitize_operation( $input ) {

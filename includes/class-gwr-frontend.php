@@ -209,39 +209,7 @@ class GWR_Frontend {
 	 */
 	public static function booking_portal_shortcode( $atts = array() ) {
 		self::enqueue_public_assets();
-		$query = is_array( $_GET ) ? wp_unslash( $_GET ) : array();
-		$atts = shortcode_atts( array( 'booking_code' => '', 'booking_token' => '' ), $atts, 'gwr_booking_portal' );
-		$code = sanitize_text_field( $query['booking_code'] ?? $atts['booking_code'] );
-		$token = sanitize_text_field( $query['gwr_token'] ?? ( $query['booking_token'] ?? $atts['booking_token'] ) );
-		$booking = $code ? self::booking_by_code( $code ) : null;
-
-		ob_start();
-		echo '<section class="gwr-booking-portal gwr-block">';
-		echo '<div class="gwr-booking-portal__panel">';
-		echo '<span class="gwr-payment-status__eyebrow">' . esc_html__( 'Area prenotazione', 'gest-web-rent' ) . '</span>';
-		echo '<h2>' . esc_html__( 'Documenti e stato prenotazione', 'gest-web-rent' ) . '</h2>';
-		if ( ! $booking || ! GWR_Bookings::verify_public_token( $booking, $token ) ) {
-			if ( $code || $token ) {
-				echo '<div class="gwr-booking-portal__alert">' . esc_html__( 'Codice o token non valido.', 'gest-web-rent' ) . '</div>';
-			}
-			echo '<form method="get" class="gwr-booking-portal__form"><label><span>' . esc_html__( 'Codice prenotazione', 'gest-web-rent' ) . '</span><input type="text" name="booking_code" value="' . esc_attr( $code ) . '" required /></label><label><span>' . esc_html__( 'Token prenotazione', 'gest-web-rent' ) . '</span><input type="text" name="gwr_token" value="" required /></label><button class="gwr-button">' . esc_html__( 'Apri area', 'gest-web-rent' ) . '</button></form>';
-			echo '</div></section>';
-			return ob_get_clean();
-		}
-
-		echo '<div class="gwr-booking-portal__summary">';
-		echo '<div><span>' . esc_html__( 'Prenotazione', 'gest-web-rent' ) . '</span><strong>' . esc_html( $booking['booking_code'] ) . '</strong></div>';
-		echo '<div><span>' . esc_html__( 'Stato', 'gest-web-rent' ) . '</span><strong>' . esc_html( GWR_Bookings::statuses()[ $booking['status'] ] ?? $booking['status'] ) . '</strong></div>';
-		echo '<div><span>' . esc_html__( 'Veicolo', 'gest-web-rent' ) . '</span><strong>' . esc_html( $booking['vehicle_title'] ) . '</strong></div>';
-		echo '<div><span>' . esc_html__( 'Periodo', 'gest-web-rent' ) . '</span><strong>' . esc_html( GWR_Bookings::format_datetime( $booking['pickup_datetime'] ) . ' - ' . GWR_Bookings::format_datetime( $booking['return_datetime'] ) ) . '</strong></div>';
-		echo '<div><span>' . esc_html__( 'Totale', 'gest-web-rent' ) . '</span><strong>' . esc_html( GWR_Bookings::format_money( $booking['total_amount'], $booking['currency'] ) ) . '</strong></div>';
-		echo '<div><span>' . esc_html__( 'Pagamento', 'gest-web-rent' ) . '</span><strong>' . esc_html( $booking['payment_status'] ) . '</strong></div>';
-		echo '</div>';
-
-		self::portal_documents( $booking, $token );
-		self::portal_attachments( $booking, $token );
-		echo '</div></section>';
-		return ob_get_clean();
+		return GWR_Customer_Portal::render_shortcode( $atts );
 	}
 
 	/**

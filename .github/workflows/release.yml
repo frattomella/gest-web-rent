@@ -31,6 +31,8 @@ jobs:
           rsync -av \
             --exclude='.git' \
             --exclude='.github' \
+            --exclude='.agents' \
+            --exclude='.codex' \
             --exclude='.gitattributes' \
             --exclude='.gitignore' \
             --exclude='.gitkeep' \
@@ -71,4 +73,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: build/gest-web-rent.zip
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
