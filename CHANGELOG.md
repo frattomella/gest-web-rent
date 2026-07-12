@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.8.0
+
+- Aggiunto motore documentale per riepilogo prenotazione, conferma, voucher, contratto, verbale consegna, verbale riconsegna, riepilogo pagamenti e conferma annullamento.
+- Create le tabelle `gwr_booking_documents`, `gwr_document_signatures`, `gwr_document_email_logs` e `gwr_booking_attachments` con migrazione idempotente.
+- Aggiunti snapshot documentali versionati con hash contenuto/file e cache HTML protetta in upload.
+- Aggiunti download e preview autorizzati via capability admin, token prenotazione o URL firmato temporaneo.
+- Aggiunta area admin Documenti con archivio, impostazioni aziendali, logo Media Library, testi e clausole configurabili.
+- Aggiunto pannello Documenti nel dettaglio prenotazione con genera, anteprima, download, invia, firma, invalida, archivia e allegati.
+- Aggiunto shortcode `[gwr_booking_portal]` per consultazione cliente sicura dei documenti disponibili.
+- Strategia PDF: fallback HTML A4 stampabile/salvabile in PDF, senza dipendenze esterne o servizi headless.
+
+## 1.7.0
+
+- Aggiunto motore tariffario centralizzato con importi in centesimi, durata noleggio unificata e snapshot immutabile in prenotazione.
+- Create le tabelle `gwr_price_lists`, `gwr_pricing_rules`, `gwr_coupons`, `gwr_coupon_usages`, `gwr_payments` e `gwr_payment_events` con migrazione idempotente.
+- Aggiunte regole per listini, stagionalita, durata, weekend, date speciali, supplementi, sconti, coupon, IVA e deposito cauzionale.
+- Aggiunti pagamento Stripe Checkout, bonifico, richiesta e pagamento al ritiro con split acconto/saldo.
+- Aggiunti webhook Stripe firmati, idempotenza eventi, retry pubblico, riconciliazione cron e stati pagamento dedicati.
+- Aggiunta area admin Tariffe e pagamenti, elenco pagamenti, dettaglio eventi, rimborsi e test connessione Stripe.
+- Aggiunto shortcode `[gwr_payment_status]` e blocco automatico per gli URL di ritorno Stripe.
+
 ## 1.6.0
 
 - Aggiunto flusso prenotazione fullscreen a quattro step con cliente, conducente, documenti e consensi.

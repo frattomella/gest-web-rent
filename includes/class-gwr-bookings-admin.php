@@ -70,12 +70,13 @@ class GWR_Bookings_Admin {
 		$logs = GWR_Bookings::logs( $booking_id );
 		$vehicles = GWR_CPT::get_vehicles();
 		$print_url = wp_nonce_url( admin_url( 'admin-post.php?action=gwr_booking_print&booking_id=' . $booking_id ), 'gwr_booking_print_' . $booking_id );
-		GWR_Admin::page_start( 'bookings', sprintf( __( 'Prenotazione %s', 'gest-web-rent' ), $booking['booking_code'] ), __( 'Dati correnti, snapshot commerciale, consensi e cronologia della pratica.', 'gest-web-rent' ), array( array( 'label' => __( 'Stampa riepilogo', 'gest-web-rent' ), 'url' => $print_url ), array( 'label' => __( 'Torna alle prenotazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-bookings' ) ) ) );
+		GWR_Admin::page_start( 'bookings', sprintf( __( 'Prenotazione %s', 'gest-web-rent' ), $booking['booking_code'] ), __( 'Dati correnti, snapshot commerciale, consensi, documenti e cronologia della pratica.', 'gest-web-rent' ), array( array( 'label' => __( 'Stampa riepilogo', 'gest-web-rent' ), 'url' => $print_url ), array( 'label' => __( 'Torna alle prenotazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-bookings' ) ) ) );
 		self::notice();
 		echo '<div class="gwr-booking-detail-grid"><main class="gwr-booking-detail-main">';
 		self::summary_section( $booking, $items );
 		self::people_section( $booking );
 		self::snapshot_section( $booking );
+		GWR_Documents_Admin::booking_documents_panel( $booking );
 		self::operations_section( $booking );
 		self::logs_section( $logs );
 		echo '</main><aside class="gwr-booking-detail-side">';
@@ -108,18 +109,9 @@ class GWR_Bookings_Admin {
 		self::require_capability();
 		$booking_id = absint( $_GET['booking_id'] ?? 0 );
 		check_admin_referer( 'gwr_booking_print_' . $booking_id );
-		$booking = GWR_Bookings::get( $booking_id );
-		if ( ! $booking ) { wp_die( esc_html__( 'Prenotazione non trovata.', 'gest-web-rent' ) ); }
-		$items = GWR_Bookings::items( $booking_id );
-		nocache_headers();
-		header( 'Content-Type: text/html; charset=' . get_bloginfo( 'charset' ) );
-		echo '<!doctype html><html><head><meta charset="' . esc_attr( get_bloginfo( 'charset' ) ) . '"><title>' . esc_html( $booking['booking_code'] ) . '</title><style>body{font:14px/1.5 sans-serif;color:#172033;max-width:900px;margin:30px auto;padding:0 20px}h1,h2{color:#102a63}section{border:1px solid #dce3ef;border-radius:14px;padding:18px;margin:16px 0}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #e8edf5}@media print{button{display:none}body{margin:0;max-width:none}}</style></head><body><button onclick="window.print()">' . esc_html__( 'Stampa', 'gest-web-rent' ) . '</button><h1>' . esc_html( $booking['booking_code'] ) . '</h1>';
-		echo '<section><h2>' . esc_html__( 'Riepilogo', 'gest-web-rent' ) . '</h2><p>' . esc_html( $booking['vehicle_title'] . ' - ' . GWR_Bookings::format_datetime( $booking['pickup_datetime'] ) . ' / ' . GWR_Bookings::format_datetime( $booking['return_datetime'] ) ) . '</p><p>' . esc_html( $booking['pickup_location'] . ' - ' . $booking['return_location'] ) . '</p><strong>' . esc_html( GWR_Bookings::format_money( $booking['total_amount'], $booking['currency'] ) ) . '</strong></section>';
-		self::print_people( $booking );
-		echo '<section><h2>' . esc_html__( 'Extra e coperture', 'gest-web-rent' ) . '</h2><table><tbody>';
-		foreach ( $items as $item ) { echo '<tr><td>' . esc_html( $item['item_name'] ) . '</td><td>' . esc_html( $item['quantity'] ) . '</td><td>' . esc_html( GWR_Bookings::format_money( $item['total_price'], $booking['currency'] ) ) . '</td></tr>'; }
-		echo '</tbody></table></section><section><h2>' . esc_html__( 'Condizioni applicate', 'gest-web-rent' ) . '</h2><pre style="white-space:pre-wrap">' . esc_html( wp_json_encode( $booking['snapshot']['rental_terms'] ?? array(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE ) ) . '</pre></section>' . ( $booking['customer_notes'] ? '<section><h2>' . esc_html__( 'Note cliente', 'gest-web-rent' ) . '</h2><p>' . nl2br( esc_html( $booking['customer_notes'] ) ) . '</p></section>' : '' ) . '<section><h2>' . esc_html__( 'Consensi', 'gest-web-rent' ) . '</h2><p>' . esc_html( sprintf( __( 'Privacy versione %s accettata il %s. Condizioni accettate il %s.', 'gest-web-rent' ), $booking['privacy_version'], GWR_Bookings::format_datetime( $booking['privacy_accepted_at'] ), GWR_Bookings::format_datetime( $booking['terms_accepted_at'] ) ) ) . '</p></section></body></html>';
-		exit;
+		$document = GWR_Document_Service::generate( $booking_id, 'booking_summary' );
+		if ( is_wp_error( $document ) ) { wp_die( esc_html( $document->get_error_message() ) ); }
+		GWR_PDF_Service::stream_html( $document, '', false );
 	}
 
 	private static function list_row( $booking ) {
@@ -142,8 +134,8 @@ class GWR_Bookings_Admin {
 	private static function snapshot_section( $booking ) {
 		$snapshot = $booking['snapshot'];
 		echo '<section class="gwr-data-grid-card"><h2>' . esc_html__( 'Snapshot commerciale', 'gest-web-rent' ) . '</h2><p>' . esc_html__( 'Questi dati restano invariati anche se condizioni e prezzi correnti vengono modificati.', 'gest-web-rent' ) . '</p><div class="gwr-booking-price-grid">';
-		foreach ( array( 'base_amount' => 'Base', 'extras_amount' => 'Extra', 'coverages_amount' => 'Coperture', 'supplements_amount' => 'Supplementi', 'taxes_amount' => 'Tasse', 'total_amount' => 'Totale', 'deposit_amount' => 'Deposito' ) as $key => $label ) { echo '<div><span>' . esc_html( $label ) . '</span><strong>' . esc_html( GWR_Bookings::format_money( $booking[ $key ], $booking['currency'] ) ) . '</strong></div>'; }
-		echo '</div><details><summary>' . esc_html__( 'Condizioni applicate', 'gest-web-rent' ) . '</summary><pre class="gwr-snapshot-json">' . esc_html( wp_json_encode( $snapshot['rental_terms'] ?? array(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE ) ) . '</pre></details></section>';
+		foreach ( array( 'base_amount' => 'Base', 'extras_amount' => 'Extra', 'coverages_amount' => 'Coperture', 'supplements_amount' => 'Supplementi', 'discounts_amount' => 'Sconti', 'taxes_amount' => 'Tasse', 'total_amount' => 'Totale noleggio', 'pay_now_amount' => 'Da pagare ora', 'pay_later_amount' => 'Saldo', 'deposit_amount' => 'Deposito al ritiro' ) as $key => $label ) { echo '<div><span>' . esc_html( $label ) . '</span><strong>' . esc_html( GWR_Bookings::format_money( $booking[ $key ] ?? 0, $booking['currency'] ) ) . '</strong></div>'; }
+		echo '</div><details><summary>' . esc_html__( 'Condizioni applicate', 'gest-web-rent' ) . '</summary><pre class="gwr-snapshot-json">' . esc_html( wp_json_encode( $snapshot['rental_terms'] ?? array(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE ) ) . '</pre></details><details><summary>' . esc_html__( 'Breakdown prezzo', 'gest-web-rent' ) . '</summary><pre class="gwr-snapshot-json">' . esc_html( wp_json_encode( $booking['pricing_snapshot'] ?? ( $snapshot['price'] ?? array() ), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE ) ) . '</pre></details></section>';
 	}
 
 	private static function operations_section( $booking ) {

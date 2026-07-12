@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,6 +22,11 @@ Funzionalita principali:
 * Coperture, franchigie, deposito, requisiti, documenti, politiche, extra e FAQ configurabili.
 * Prenotazione a quattro step con cliente, conducente, consensi e conferma.
 * Prezzo e disponibilita ricalcolati dal server con protezione dai conflitti.
+* Motore tariffario server-side con listini, stagionalita, durata, weekend, coupon, tasse e snapshot.
+* Pagamenti online Stripe Checkout, bonifico, richiesta e pagamento al ritiro con acconto/saldo.
+* Area amministrativa per tariffe, coupon, impostazioni Stripe, pagamenti, webhook e rimborsi.
+* Documenti professionali di prenotazione con voucher, conferme, contratti, verbali e riepiloghi.
+* Download protetti, snapshot versionati, firme semplici, allegati pratica e portale cliente.
 * Gestione amministrativa di stato, cronologia, consegna, riconsegna e stampa.
 * Foto veicolo tramite Media Library.
 * Indisponibilita per date in tabella custom.
@@ -51,6 +56,10 @@ No. La creazione e modifica veicolo avviene tramite form custom nel menu Gest We
 
 Usa `[gwr_catalog]`. L'alias `[gest_web_rent_catalog]` resta disponibile per compatibilita.
 
+Per mostrare una pagina dedicata allo stato pagamento usa `[gwr_payment_status]`. Gli URL Stripe predefiniti mostrano automaticamente lo stesso blocco quando rientrano con `gwr_payment=success` o `gwr_payment=cancel`.
+
+Per mostrare l'area documenti cliente usa `[gwr_booking_portal]`. L'accesso richiede codice prenotazione e token pubblico della pratica.
+
 = Esiste un calendario separato? =
 
 No. Il filtro date e integrato nel catalogo e avvia la ricerca con il pulsante Cerca veicoli.
@@ -64,6 +73,23 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 1.8.0 =
+* Aggiunto motore documentale per riepilogo prenotazione, conferma, voucher, contratto, verbale consegna, verbale riconsegna, riepilogo pagamenti e conferma annullamento.
+* Aggiunte tabelle `gwr_booking_documents`, `gwr_document_signatures`, `gwr_document_email_logs` e `gwr_booking_attachments`.
+* Aggiunti snapshot documentali versionati con hash contenuto/file e cache HTML protetta in upload.
+* Aggiunti download e preview autorizzati via capability admin, token prenotazione o URL firmato temporaneo.
+* Aggiunta area admin Documenti con archivio, impostazioni aziendali, logo Media Library, testi e clausole configurabili.
+* Aggiunto pannello Documenti nel dettaglio prenotazione con genera, anteprima, download, invia, firma, invalida, archivia e allegati.
+* Aggiunto shortcode `[gwr_booking_portal]` per consultazione cliente sicura dei documenti disponibili.
+
+= 1.7.0 =
+* Aggiunto motore tariffario centralizzato con importi in centesimi, durata noleggio unificata e snapshot immutabile in prenotazione.
+* Aggiunte tabelle `gwr_price_lists`, `gwr_pricing_rules`, `gwr_coupons`, `gwr_coupon_usages`, `gwr_payments` e `gwr_payment_events`.
+* Aggiunte regole per listini, stagionalita, durata, weekend, date speciali, supplementi, sconti, coupon, IVA e deposito cauzionale.
+* Aggiunti pagamento Stripe Checkout, bonifico, richiesta e pagamento al ritiro con split acconto/saldo.
+* Aggiunti webhook Stripe firmati, idempotenza eventi, retry pubblico, riconciliazione cron e stati pagamento dedicati.
+* Aggiunta area admin Tariffe e pagamenti, elenco pagamenti, dettaglio evento, rimborsi e test connessione Stripe.
 
 = 1.6.0 =
 * Aggiunto flusso completo di prenotazione a quattro step nel configuratore fullscreen.

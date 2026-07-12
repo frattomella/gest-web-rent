@@ -9,7 +9,7 @@ defined( 'ABSPATH' ) || exit;
 
 /** Central booking domain service. */
 class GWR_Bookings {
-	const DB_VERSION = '1.6.0';
+	const DB_VERSION = '1.7.0';
 	const DB_OPTION  = 'gwr_bookings_db_version';
 
 	/** Register runtime hooks. */
@@ -77,6 +77,13 @@ class GWR_Bookings {
 			taxes_amount decimal(12,2) NOT NULL DEFAULT 0,
 			total_amount decimal(12,2) NOT NULL DEFAULT 0,
 			deposit_amount decimal(12,2) NOT NULL DEFAULT 0,
+			pay_now_amount decimal(12,2) NOT NULL DEFAULT 0,
+			pay_later_amount decimal(12,2) NOT NULL DEFAULT 0,
+			payment_method varchar(40) NOT NULL DEFAULT 'request',
+			payment_status varchar(40) NOT NULL DEFAULT 'not_required',
+			pricing_snapshot_json longtext NULL,
+			public_token_hash varchar(128) NULL,
+			public_token_expires_at datetime NULL,
 			customer_type varchar(20) NOT NULL DEFAULT 'private',
 			customer_email varchar(190) NOT NULL,
 			customer_phone varchar(60) NOT NULL,
@@ -104,9 +111,11 @@ class GWR_Bookings {
 			UNIQUE KEY booking_code (booking_code),
 			KEY vehicle_id (vehicle_id),
 			KEY status (status),
+			KEY payment_status (payment_status),
 			KEY pickup_datetime (pickup_datetime),
 			KEY return_datetime (return_datetime),
 			KEY customer_email (customer_email),
+			KEY public_token_hash (public_token_hash),
 			KEY created_at (created_at)
 		) {$charset};";
 
@@ -153,10 +162,14 @@ class GWR_Bookings {
 	public static function statuses() {
 		return array(
 			'pending'      => __( 'In attesa', 'gest-web-rent' ),
+			'awaiting_payment' => __( 'In attesa di pagamento', 'gest-web-rent' ),
+			'awaiting_bank_transfer' => __( 'In attesa di bonifico', 'gest-web-rent' ),
+			'payment_failed' => __( 'Pagamento fallito', 'gest-web-rent' ),
 			'confirmed'    => __( 'Confermata', 'gest-web-rent' ),
 			'rejected'     => __( 'Rifiutata', 'gest-web-rent' ),
 			'cancelled'    => __( 'Annullata', 'gest-web-rent' ),
 			'expired'      => __( 'Scaduta', 'gest-web-rent' ),
+			'refunded'     => __( 'Rimborsata', 'gest-web-rent' ),
 			'delivered'    => __( 'Veicolo consegnato', 'gest-web-rent' ),
 			'in_progress'  => __( 'In corso', 'gest-web-rent' ),
 			'returned'     => __( 'Riconsegnata', 'gest-web-rent' ),
@@ -168,8 +181,12 @@ class GWR_Bookings {
 	/** Allowed state changes. */
 	public static function transitions() {
 		return array(
-			'pending'     => array( 'confirmed', 'rejected', 'cancelled', 'expired' ),
+			'pending'     => array( 'confirmed', 'rejected', 'cancelled', 'expired', 'awaiting_payment', 'awaiting_bank_transfer' ),
+			'awaiting_payment' => array( 'confirmed', 'payment_failed', 'cancelled', 'expired' ),
+			'awaiting_bank_transfer' => array( 'confirmed', 'cancelled', 'expired' ),
+			'payment_failed' => array( 'awaiting_payment', 'cancelled', 'expired' ),
 			'confirmed'   => array( 'cancelled', 'delivered', 'no_show' ),
+			'refunded'    => array(),
 			'delivered'   => array( 'in_progress', 'returned' ),
 			'in_progress' => array( 'returned' ),
 			'returned'    => array( 'completed' ),
@@ -178,7 +195,7 @@ class GWR_Bookings {
 
 	/** Statuses that reserve the vehicle. */
 	public static function blocking_statuses() {
-		return array( 'pending', 'confirmed', 'delivered', 'in_progress' );
+		return array( 'pending', 'awaiting_payment', 'awaiting_bank_transfer', 'payment_failed', 'confirmed', 'delivered', 'in_progress' );
 	}
 
 	/** Validate and create a booking atomically. */
@@ -205,7 +222,7 @@ class GWR_Bookings {
 		if ( is_wp_error( $documents ) ) {
 			return $documents;
 		}
-		$price = self::calculate_price( $vehicle, $period, $input['selection'], $input['driver'], $terms_payload );
+		$price = self::calculate_price( $vehicle, $period, $input['selection'], $input['driver'], $terms_payload, array( 'coupon_code' => $input['coupon_code'], 'customer_email' => $input['customer']['email'], 'payment_method' => $input['payment_method'] ) );
 		if ( is_wp_error( $price ) ) {
 			return $price;
 		}
@@ -224,10 +241,13 @@ class GWR_Bookings {
 			$now = current_time( 'mysql' );
 			$expiry_hours = max( 1, min( 168, absint( $settings['pending_expiry_hours'] ?? 24 ) ) );
 			$provisional = 'TMP-' . wp_generate_uuid4();
+			$public_token = wp_generate_password( 32, false, false );
+			$initial_status = self::initial_status_for_payment( $input['payment_method'], $price );
+			$initial_payment_status = ( ! empty( $price['pay_now_minor'] ) && in_array( $input['payment_method'], array( 'stripe', 'bank_transfer' ), true ) ) ? 'pending' : 'not_required';
 			$data = array(
 				'booking_code' => $provisional,
 				'vehicle_id' => $input['vehicle_id'],
-				'status' => 'pending',
+				'status' => $initial_status,
 				'pickup_location' => $input['pickup_location'],
 				'return_location' => $input['return_location'],
 				'pickup_datetime' => $period['pickup_mysql'],
@@ -242,6 +262,13 @@ class GWR_Bookings {
 				'taxes_amount' => self::minor_to_decimal( $price['taxes_minor'] ),
 				'total_amount' => self::minor_to_decimal( $price['total_minor'] ),
 				'deposit_amount' => self::minor_to_decimal( $price['deposit_minor'] ),
+				'pay_now_amount' => self::minor_to_decimal( $price['pay_now_minor'] ?? 0 ),
+				'pay_later_amount' => self::minor_to_decimal( $price['pay_later_minor'] ?? 0 ),
+				'payment_method' => $input['payment_method'],
+				'payment_status' => $initial_payment_status,
+				'pricing_snapshot_json' => wp_json_encode( $price ),
+				'public_token_hash' => self::hash_public_token( $public_token ),
+				'public_token_expires_at' => ( new DateTimeImmutable( 'now', wp_timezone() ) )->modify( '+' . $expiry_hours . ' hours' )->format( 'Y-m-d H:i:s' ),
 				'customer_type' => $input['customer']['customer_type'],
 				'customer_email' => $input['customer']['email'],
 				'customer_phone' => $input['customer']['phone'],
@@ -273,7 +300,10 @@ class GWR_Bookings {
 				throw new Exception( __( 'Impossibile bloccare il periodo selezionato.', 'gest-web-rent' ) );
 			}
 			$wpdb->update( self::table(), array( 'availability_id' => $availability_id ), array( 'id' => $booking_id ), array( '%d' ), array( '%d' ) );
-			self::add_log( $booking_id, 'created', '', 'pending', __( 'Prenotazione creata dal catalogo.', 'gest-web-rent' ) );
+			if ( ! empty( $price['coupon_id'] ) ) {
+				GWR_Coupon_Service::reserve_usage( $price['coupon_id'], $booking_id, $input['customer']['email'], absint( $price['coupon']['amount_minor'] ?? 0 ) );
+			}
+			self::add_log( $booking_id, 'created', '', $initial_status, __( 'Prenotazione creata dal catalogo.', 'gest-web-rent' ) );
 			$wpdb->query( 'COMMIT' );
 		} catch ( Exception $exception ) {
 			$wpdb->query( 'ROLLBACK' );
@@ -282,6 +312,7 @@ class GWR_Bookings {
 		}
 		self::release_vehicle_lock( $input['vehicle_id'] );
 		$booking = self::get( $booking_id );
+		$booking['public_token'] = $public_token;
 		self::send_notifications( $booking );
 
 		return $booking;
@@ -336,85 +367,16 @@ class GWR_Bookings {
 			'driver' => $driver,
 			'driver_same' => $driver_same,
 			'selection' => $selection,
+			'coupon_code' => sanitize_text_field( $raw['coupon_code'] ?? '' ),
+			'payment_method' => self::sanitize_payment_method( $raw['payment_method'] ?? '' ),
 			'document_confirmations' => array_values( array_filter( array_map( 'sanitize_key', is_array( $raw['document_confirmations'] ?? null ) ? $raw['document_confirmations'] : array() ) ) ),
 			'consents' => $consents,
 		);
 	}
 
 	/** Calculate all trusted prices in integer minor units. */
-	public static function calculate_price( $vehicle, $period, $selection, $driver, $terms_payload ) {
-		if ( ! empty( $vehicle['min_rental_days'] ) && $period['days'] < absint( $vehicle['min_rental_days'] ) ) {
-			return new WP_Error( 'gwr_rental_too_short', sprintf( __( 'La durata minima per questo veicolo e di %d giorni.', 'gest-web-rent' ), absint( $vehicle['min_rental_days'] ) ) );
-		}
-		if ( ! empty( $vehicle['max_rental_days'] ) && $period['days'] > absint( $vehicle['max_rental_days'] ) ) {
-			return new WP_Error( 'gwr_rental_too_long', sprintf( __( 'La durata massima per questo veicolo e di %d giorni.', 'gest-web-rent' ), absint( $vehicle['max_rental_days'] ) ) );
-		}
-		$daily_minor = (int) round( (float) $vehicle['daily_price'] * 100 );
-		if ( $daily_minor <= 0 ) {
-			return new WP_Error( 'gwr_price_missing', __( 'La tariffa del veicolo non e configurata.', 'gest-web-rent' ) );
-		}
-		$terms = $terms_payload['rental_terms'] ?? array();
-		$currency = sanitize_key( $terms['general']['currency'] ?? 'EUR' );
-		$currency = 3 === strlen( $currency ) ? strtoupper( $currency ) : 'EUR';
-		$base = $daily_minor * $period['days'];
-		$extras_total = 0;
-		$coverages_total = 0;
-		$supplements_total = 0;
-		$items = array();
-		$selected_extras = array();
-		foreach ( $selection['extras'] as $selected ) {
-			$selected_extras[ $selected['id'] ] = $selected['quantity'];
-		}
-		foreach ( $terms_payload['extras'] ?? array() as $extra ) {
-			$id = sanitize_key( $extra['id'] ?? '' );
-			if ( ! $id || ( empty( $extra['mandatory'] ) && ! isset( $selected_extras[ $id ] ) ) ) {
-				continue;
-			}
-			$quantity = isset( $selected_extras[ $id ] ) ? absint( $selected_extras[ $id ] ) : max( 1, absint( $extra['min_quantity'] ?? 1 ) );
-			$min = max( ! empty( $extra['mandatory'] ) ? 1 : 0, absint( $extra['min_quantity'] ?? 0 ) );
-			$max = max( 1, absint( $extra['max_quantity'] ?? 1 ), $min );
-			if ( $quantity < $min || $quantity > $max ) {
-				return new WP_Error( 'gwr_extra_quantity', sprintf( __( 'Quantita non valida per %s.', 'gest-web-rent' ), $extra['name'] ?? $id ) );
-			}
-			$total = self::price_for_mode( absint( $extra['price_minor'] ?? 0 ), $extra['price_mode'] ?? 'per_rental', $quantity, $period['days'], $base, 0 );
-			$extras_total += $total;
-			$items[] = self::price_item( 'extra', $id, $extra['name'] ?? $id, $quantity, absint( $extra['price_minor'] ?? 0 ), $extra['price_mode'] ?? 'per_rental', $period['days'], $total, $extra );
-		}
-
-		$selected_coverages = array_flip( $selection['coverages'] );
-		foreach ( $terms['insurance_coverages'] ?? array() as $coverage ) {
-			$id = sanitize_key( $coverage['id'] ?? '' );
-			if ( 'optional' !== ( $coverage['status'] ?? '' ) || ! isset( $selected_coverages[ $id ] ) ) {
-				continue;
-			}
-			$total = self::price_for_mode( absint( $coverage['cost_minor'] ?? 0 ), $coverage['price_mode'] ?? 'per_rental', 1, $period['days'], $base, (float) ( $coverage['cost'] ?? 0 ) );
-			$coverages_total += $total;
-			$items[] = self::price_item( 'coverage', $id, $coverage['name'] ?? $id, 1, absint( $coverage['cost_minor'] ?? 0 ), $coverage['price_mode'] ?? 'per_rental', $period['days'], $total, $coverage );
-		}
-
-		$requirements = $terms['driver_requirements'] ?? array();
-		$age = self::years_between( $driver['birth_date'], $period['pickup'] );
-		$apply_surcharge = ( ! empty( $requirements['young_driver_surcharge'] ) && ! empty( $requirements['young_driver_max_age'] ) && $age <= absint( $requirements['young_driver_max_age'] ) ) || ( ! empty( $requirements['senior_driver_surcharge'] ) && ! empty( $requirements['senior_driver_min_age'] ) && $age >= absint( $requirements['senior_driver_min_age'] ) );
-		if ( $apply_surcharge && ! empty( $requirements['surcharge_cost'] ) ) {
-			$unit = (int) round( (float) $requirements['surcharge_cost'] * 100 );
-			$mode = $requirements['surcharge_mode'] ?? 'per_rental';
-			$supplements_total = self::price_for_mode( $unit, $mode, 1, $period['days'], $base, (float) $requirements['surcharge_cost'] );
-			$items[] = self::price_item( 'surcharge', 'driver', __( 'Supplemento conducente', 'gest-web-rent' ), 1, $unit, $mode, $period['days'], $supplements_total, $requirements );
-		}
-
-		$subtotal = $base + $extras_total + $coverages_total + $supplements_total;
-		$tax_rate = max( 0, min( 100, (float) ( $terms['general']['tax_rate'] ?? 0 ) ) );
-		$taxes = 0;
-		$total = $subtotal;
-		if ( $tax_rate > 0 && 'excluded' === ( $terms['general']['taxes'] ?? '' ) ) {
-			$taxes = (int) round( $subtotal * $tax_rate / 100 );
-			$total += $taxes;
-		} elseif ( $tax_rate > 0 && 'included' === ( $terms['general']['taxes'] ?? '' ) ) {
-			$taxes = (int) round( $subtotal * $tax_rate / ( 100 + $tax_rate ) );
-		}
-		$deposit = (int) round( (float) ( $terms['security_deposit']['amount'] ?? $vehicle['deposit'] ?? 0 ) * 100 );
-
-		return array( 'currency' => $currency, 'base_minor' => $base, 'extras_minor' => $extras_total, 'coverages_minor' => $coverages_total, 'supplements_minor' => $supplements_total, 'discounts_minor' => 0, 'taxes_minor' => $taxes, 'total_minor' => $total, 'deposit_minor' => $deposit, 'items' => $items );
+	public static function calculate_price( $vehicle, $period, $selection, $driver, $terms_payload, $context = array() ) {
+		return GWR_Pricing_Service::calculate( $vehicle, $period, $selection, $driver, $terms_payload, $context );
 	}
 
 	/** Verify availability against manual blocks and blocking bookings. */
@@ -482,6 +444,12 @@ class GWR_Bookings {
 		} else {
 			self::remove_availability_block( $booking );
 		}
+		if ( 'confirmed' === $new_status && class_exists( 'GWR_Coupon_Service' ) ) {
+			GWR_Coupon_Service::mark_used_by_booking( $booking_id );
+		}
+		if ( in_array( $new_status, array( 'cancelled', 'rejected', 'expired' ), true ) && class_exists( 'GWR_Coupon_Service' ) ) {
+			GWR_Coupon_Service::release_by_booking( $booking_id );
+		}
 		self::add_log( $booking_id, 'status_changed', $booking['status'], $new_status, $note );
 		self::release_vehicle_lock( $booking['vehicle_id'] );
 		$updated = self::get( $booking_id );
@@ -531,8 +499,12 @@ class GWR_Bookings {
 			}
 			foreach ( is_array( $raw['selection']['coverages'] ?? null ) ? $raw['selection']['coverages'] : array() as $id ) { $id = sanitize_key( $id ); if ( $id ) { $selection['coverages'][] = $id; } }
 		}
-		$price = self::calculate_price( $vehicle, $period, $selection, $driver, $terms );
+		$coupon_code = $booking['pricing_snapshot']['coupon_code'] ?? ( $booking['pricing_snapshot']['coupon']['code'] ?? '' );
+		$price = self::calculate_price( $vehicle, $period, $selection, $driver, $terms, array( 'coupon_code' => $coupon_code, 'customer_email' => $customer['email'], 'payment_method' => $booking['payment_method'] ?? 'request' ) );
 		if ( is_wp_error( $price ) ) { return $price; }
+		if ( 'paid' === ( $booking['payment_status'] ?? '' ) && (int) round( (float) $booking['total_amount'] * 100 ) !== (int) $price['total_minor'] ) {
+			return new WP_Error( 'gwr_paid_booking_price_locked', __( 'Il pagamento e gia riuscito: usa un rimborso o un addebito aggiuntivo invece di modificare il totale storico.', 'gest-web-rent' ) );
+		}
 
 		$lock_ids = array_values( array_unique( array( absint( $booking['vehicle_id'] ), $vehicle_id ) ) );
 		sort( $lock_ids );
@@ -555,6 +527,7 @@ class GWR_Bookings {
 				'vehicle_id' => $vehicle_id, 'pickup_location' => $input['pickup_location'], 'return_location' => $input['return_location'],
 				'pickup_datetime' => $period['pickup_mysql'], 'return_datetime' => $period['return_mysql'], 'rental_days' => $period['days'], 'currency' => $price['currency'],
 				'base_amount' => self::minor_to_decimal( $price['base_minor'] ), 'extras_amount' => self::minor_to_decimal( $price['extras_minor'] ), 'coverages_amount' => self::minor_to_decimal( $price['coverages_minor'] ), 'supplements_amount' => self::minor_to_decimal( $price['supplements_minor'] ), 'discounts_amount' => self::minor_to_decimal( $price['discounts_minor'] ), 'taxes_amount' => self::minor_to_decimal( $price['taxes_minor'] ), 'total_amount' => self::minor_to_decimal( $price['total_minor'] ), 'deposit_amount' => self::minor_to_decimal( $price['deposit_minor'] ),
+				'pay_now_amount' => self::minor_to_decimal( $price['pay_now_minor'] ?? 0 ), 'pay_later_amount' => self::minor_to_decimal( $price['pay_later_minor'] ?? 0 ), 'pricing_snapshot_json' => wp_json_encode( $price ), 'terms_snapshot_json' => wp_json_encode( self::snapshot( $vehicle, $terms, $price ) ),
 				'customer_email' => $customer['email'], 'customer_phone' => $customer['phone'], 'customer_data_json' => wp_json_encode( $customer ), 'driver_data_json' => wp_json_encode( $driver ), 'selection_json' => wp_json_encode( $selection ),
 				'admin_notes' => sanitize_textarea_field( $raw['admin_notes'] ?? $booking['admin_notes'] ), 'updated_at' => current_time( 'mysql' ),
 			);
@@ -589,8 +562,8 @@ class GWR_Bookings {
 		if ( ! $row ) {
 			return null;
 		}
-		foreach ( array( 'customer_data_json' => 'customer', 'driver_data_json' => 'driver', 'selection_json' => 'selection', 'terms_snapshot_json' => 'snapshot', 'delivery_data_json' => 'delivery', 'return_data_json' => 'return' ) as $column => $key ) {
-			$value = json_decode( (string) $row[ $column ], true );
+		foreach ( array( 'customer_data_json' => 'customer', 'driver_data_json' => 'driver', 'selection_json' => 'selection', 'terms_snapshot_json' => 'snapshot', 'pricing_snapshot_json' => 'pricing_snapshot', 'delivery_data_json' => 'delivery', 'return_data_json' => 'return' ) as $column => $key ) {
+			$value = json_decode( (string) ( $row[ $column ] ?? '' ), true );
 			$row[ $key ] = is_array( $value ) ? $value : array();
 		}
 		return $row;
@@ -614,7 +587,7 @@ class GWR_Bookings {
 		if ( $args['return_from'] ) { $where[] = 'b.return_datetime >= %s'; $values[] = sanitize_text_field( $args['return_from'] ) . ' 00:00:00'; }
 		if ( $args['created_from'] ) { $where[] = 'b.created_at >= %s'; $values[] = sanitize_text_field( $args['created_from'] ) . ' 00:00:00'; }
 		if ( '' !== (string) $args['min_amount'] ) { $where[] = 'b.total_amount >= %f'; $values[] = max( 0, (float) str_replace( ',', '.', $args['min_amount'] ) ); }
-		if ( $args['active'] && ! $args['expired'] ) { $where[] = "b.status IN ('pending','confirmed','delivered','in_progress')"; }
+		if ( $args['active'] && ! $args['expired'] ) { $where[] = "b.status IN ('pending','awaiting_payment','awaiting_bank_transfer','payment_failed','confirmed','delivered','in_progress')"; }
 		if ( $args['expired'] ) { $where[] = "b.status='expired'"; }
 		$where_sql = implode( ' AND ', $where );
 		$base = ' FROM ' . self::table() . ' b LEFT JOIN ' . GWR_CPT::vehicles_table() . ' v ON v.id=b.vehicle_id WHERE ' . $where_sql;
@@ -641,10 +614,84 @@ class GWR_Bookings {
 		return $wpdb->get_results( $wpdb->prepare( 'SELECT l.*, u.display_name FROM ' . self::logs_table() . ' l LEFT JOIN ' . $wpdb->users . ' u ON u.ID=l.user_id WHERE booking_id=%d ORDER BY l.created_at DESC, l.id DESC', absint( $booking_id ) ), ARRAY_A );
 	}
 
+	/**
+	 * Append a system log entry.
+	 *
+	 * @param int    $booking_id Booking ID.
+	 * @param string $action Action.
+	 * @param string $note Note.
+	 * @return void
+	 */
+	public static function add_system_log( $booking_id, $action, $note = '' ) {
+		$booking = self::get( $booking_id );
+		self::add_log( $booking_id, $action, $booking['status'] ?? '', $booking['status'] ?? '', $note );
+	}
+
+	/**
+	 * Synchronize booking fields from the payment service.
+	 *
+	 * @param int         $booking_id Booking ID.
+	 * @param string      $payment_status Payment status.
+	 * @param string      $payment_method Payment method.
+	 * @param string|null $booking_status Optional booking status.
+	 * @param string      $note Log note.
+	 * @return bool
+	 */
+	public static function sync_payment_status( $booking_id, $payment_status, $payment_method, $booking_status = null, $note = '' ) {
+		global $wpdb;
+		$booking = self::get( $booking_id );
+		if ( ! $booking ) {
+			return false;
+		}
+
+		$new_booking_status = null === $booking_status ? $booking['status'] : sanitize_key( $booking_status );
+		$update = array(
+			'payment_status' => sanitize_key( $payment_status ),
+			'payment_method' => sanitize_key( $payment_method ),
+			'status'         => $new_booking_status,
+			'updated_at'     => current_time( 'mysql' ),
+		);
+		if ( 'confirmed' === $new_booking_status && empty( $booking['confirmed_at'] ) ) {
+			$update['confirmed_at'] = current_time( 'mysql' );
+		}
+		if ( 'cancelled' === $new_booking_status || 'expired' === $new_booking_status || 'refunded' === $new_booking_status ) {
+			$update['cancelled_at'] = 'refunded' === $new_booking_status ? null : current_time( 'mysql' );
+		}
+		$wpdb->update( self::table(), $update, array( 'id' => absint( $booking_id ) ) );
+
+		$updated = array_merge( $booking, $update );
+		if ( in_array( $new_booking_status, self::blocking_statuses(), true ) ) {
+			self::ensure_availability_block( $updated );
+		} else {
+			self::remove_availability_block( $booking );
+		}
+
+		self::add_log( $booking_id, 'payment_status_changed', $booking['status'], $new_booking_status, $note );
+		return true;
+	}
+
+	/**
+	 * Verify a public lookup token without exposing incremental IDs.
+	 *
+	 * @param array|int $booking Booking row or ID.
+	 * @param string    $token Public token.
+	 * @return bool
+	 */
+	public static function verify_public_token( $booking, $token ) {
+		$booking = is_array( $booking ) ? $booking : self::get( absint( $booking ) );
+		if ( ! $booking || empty( $booking['public_token_hash'] ) || empty( $token ) ) {
+			return false;
+		}
+		if ( ! empty( $booking['public_token_expires_at'] ) && $booking['public_token_expires_at'] < current_time( 'mysql' ) ) {
+			return false;
+		}
+		return hash_equals( $booking['public_token_hash'], self::hash_public_token( $token ) );
+	}
+
 	/** Expire pending bookings and release blocks. */
 	public static function expire_pending() {
 		global $wpdb;
-		$ids = $wpdb->get_col( $wpdb->prepare( 'SELECT id FROM ' . self::table() . " WHERE status='pending' AND expires_at IS NOT NULL AND expires_at <= %s", current_time( 'mysql' ) ) );
+		$ids = $wpdb->get_col( $wpdb->prepare( 'SELECT id FROM ' . self::table() . " WHERE status IN ('pending','awaiting_payment','awaiting_bank_transfer','payment_failed') AND expires_at IS NOT NULL AND expires_at <= %s", current_time( 'mysql' ) ) );
 		foreach ( $ids as $id ) {
 			self::change_status( absint( $id ), 'expired', __( 'Scadenza automatica della richiesta in attesa.', 'gest-web-rent' ) );
 		}
@@ -806,8 +853,8 @@ class GWR_Bookings {
 		if ( ! $input['pickup_location'] || ! $input['return_location'] ) {
 			return new WP_Error( 'gwr_locations_invalid', __( 'Inserisci luogo di ritiro e riconsegna.', 'gest-web-rent' ), array( 'field' => 'location' ) );
 		}
-		$seconds = $return->getTimestamp() - $pickup->getTimestamp();
-		return array( 'pickup' => $pickup, 'return' => $return, 'pickup_mysql' => $pickup->format( 'Y-m-d H:i:s' ), 'return_mysql' => $return->format( 'Y-m-d H:i:s' ), 'days' => max( 1, (int) ceil( $seconds / DAY_IN_SECONDS ) ) );
+		$duration = GWR_Pricing_Service::calculate_billable_duration( $pickup, $return );
+		return array( 'pickup' => $pickup, 'return' => $return, 'pickup_mysql' => $pickup->format( 'Y-m-d H:i:s' ), 'return_mysql' => $return->format( 'Y-m-d H:i:s' ), 'days' => max( 1, absint( $duration['billable_days'] ) ), 'duration' => $duration );
 	}
 
 	private static function acquire_vehicle_lock( $vehicle_id ) {
@@ -902,6 +949,37 @@ class GWR_Bookings {
 	private static function years_between( $date, $target ) {
 		$from = self::date_object( $date );
 		return $from && $target && $from <= $target ? (int) $from->diff( $target )->y : -1;
+	}
+
+	private static function sanitize_payment_method( $method ) {
+		$settings = class_exists( 'GWR_Pricing_Service' ) ? GWR_Pricing_Service::get_settings() : array();
+		$allowed = array_filter( array_map( 'sanitize_key', explode( ',', (string) ( $settings['active_payment_methods'] ?? 'request,pickup' ) ) ) );
+		if ( ! empty( $settings['stripe_enabled'] ) && ! in_array( 'stripe', $allowed, true ) ) {
+			$allowed[] = 'stripe';
+		}
+		if ( ! empty( $settings['bank_transfer_enabled'] ) && ! in_array( 'bank_transfer', $allowed, true ) ) {
+			$allowed[] = 'bank_transfer';
+		}
+		$allowed = $allowed ?: array( 'request', 'pickup' );
+		$method = sanitize_key( $method ?: ( $settings['default_payment_method'] ?? 'request' ) );
+		return in_array( $method, $allowed, true ) ? $method : $allowed[0];
+	}
+
+	private static function initial_status_for_payment( $method, $price ) {
+		if ( empty( $price['pay_now_minor'] ) ) {
+			return 'pending';
+		}
+		if ( 'stripe' === $method ) {
+			return 'awaiting_payment';
+		}
+		if ( 'bank_transfer' === $method ) {
+			return 'awaiting_bank_transfer';
+		}
+		return 'pending';
+	}
+
+	private static function hash_public_token( $token ) {
+		return hash_hmac( 'sha256', (string) $token, wp_salt( 'auth' ) );
 	}
 
 	private static function sanitize_operation( $input ) {

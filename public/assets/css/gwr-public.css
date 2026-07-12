@@ -1,12 +1,22 @@
 .gwr-block,
 .gwr-rent-catalog,
+.gwr-payment-status,
+.gwr-booking-portal,
 .gwr-rent-catalog *,
+.gwr-payment-status *,
+.gwr-booking-portal *,
 .gwr-rent-catalog *::before,
-.gwr-rent-catalog *::after {
+.gwr-payment-status *::before,
+.gwr-booking-portal *::before,
+.gwr-rent-catalog *::after,
+.gwr-payment-status *::after,
+.gwr-booking-portal *::after {
   box-sizing: border-box;
 }
 
-.gwr-rent-catalog {
+.gwr-rent-catalog,
+.gwr-payment-status,
+.gwr-booking-portal {
   --gwr-primary: #173787;
   --gwr-primary-hover: #102a66;
   --gwr-primary-soft: #edf3ff;
@@ -362,6 +372,210 @@
 .gwr-button { background: var(--gwr-primary); color: #fff; box-shadow: 0 10px 22px rgba(23, 55, 135, .16); }
 .gwr-button-secondary { border-color: var(--gwr-border); background: #fff; color: var(--gwr-primary); }
 .gwr-button:hover, .gwr-button-secondary:hover, .gwr-button:focus, .gwr-button-secondary:focus { transform: translateY(-1px); outline: none; }
+
+.gwr-payment-status {
+  width: min(100%, var(--gwr-shell-max, 960px));
+  max-width: var(--gwr-shell-max, 960px);
+  margin: 24px auto;
+  padding: clamp(12px, 2vw, 22px);
+  color: var(--gwr-ink);
+  font-family: ui-sans-serif, "Segoe UI", system-ui, sans-serif;
+}
+
+.gwr-payment-status__panel {
+  display: grid;
+  gap: 16px;
+  padding: clamp(22px, 4vw, 36px);
+  border: 1px solid var(--gwr-border);
+  border-radius: var(--gwr-radius-md);
+  background: var(--gwr-surface);
+  box-shadow: var(--gwr-shadow-sm);
+}
+
+.gwr-payment-status__eyebrow {
+  color: var(--gwr-primary);
+  font-size: .72rem;
+  font-weight: 780;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.gwr-payment-status h2 {
+  margin: 0;
+  color: var(--gwr-ink);
+  font-size: clamp(1.45rem, 2.2vw, 2rem);
+  line-height: 1.12;
+}
+
+.gwr-payment-status p {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--gwr-muted);
+  line-height: 1.65;
+}
+
+.gwr-payment-status__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.gwr-payment-status__summary > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--gwr-border);
+  border-radius: var(--gwr-radius-sm);
+  background: var(--gwr-surface-muted);
+}
+
+.gwr-payment-status__summary span {
+  color: var(--gwr-muted);
+  font-size: .75rem;
+  font-weight: 680;
+}
+
+.gwr-payment-status__summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--gwr-ink);
+}
+
+.gwr-payment-status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gwr-booking-portal {
+  width: min(100%, var(--gwr-shell-max, 980px));
+  max-width: var(--gwr-shell-max, 980px);
+  margin: 24px auto;
+  padding: clamp(12px, 2vw, 22px);
+}
+
+.gwr-booking-portal__panel {
+  display: grid;
+  gap: 18px;
+  padding: clamp(22px, 4vw, 36px);
+  border: 1px solid var(--gwr-border);
+  border-radius: var(--gwr-radius-md);
+  background: var(--gwr-surface);
+  box-shadow: var(--gwr-shadow-sm);
+}
+
+.gwr-booking-portal h2,
+.gwr-booking-portal h3 {
+  margin: 0;
+  color: var(--gwr-ink);
+}
+
+.gwr-booking-portal__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.gwr-booking-portal__form label {
+  display: grid;
+  gap: 7px;
+  color: var(--gwr-ink);
+  font-size: .86rem;
+  font-weight: 700;
+}
+
+.gwr-booking-portal__form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 13px;
+  border: 1px solid var(--gwr-border);
+  border-radius: var(--gwr-radius-sm);
+  color: var(--gwr-ink);
+  font: inherit;
+}
+
+.gwr-booking-portal__alert {
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: var(--gwr-radius-sm);
+  background: #fff1f2;
+  color: var(--gwr-error);
+  font-weight: 700;
+}
+
+.gwr-booking-portal__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.gwr-booking-portal__summary > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--gwr-border);
+  border-radius: var(--gwr-radius-sm);
+  background: var(--gwr-surface-muted);
+}
+
+.gwr-booking-portal__summary span,
+.gwr-booking-portal__list article span {
+  color: var(--gwr-muted);
+  font-size: .75rem;
+  font-weight: 680;
+}
+
+.gwr-booking-portal__summary strong,
+.gwr-booking-portal__list article strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--gwr-ink);
+}
+
+.gwr-booking-portal__section {
+  display: grid;
+  gap: 12px;
+}
+
+.gwr-booking-portal__list {
+  display: grid;
+  gap: 10px;
+}
+
+.gwr-booking-portal__list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px;
+  border: 1px solid var(--gwr-border);
+  border-radius: var(--gwr-radius-sm);
+  background: #fff;
+}
+
+.gwr-booking-portal__list article > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.gwr-payment-status.is-loading [data-gwr-payment-message]::after {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  text-align: left;
+  animation: gwr-status-dots 1s steps(3, end) infinite;
+}
+
+@keyframes gwr-status-dots {
+  0% { content: ""; }
+  33% { content: "."; }
+  66% { content: ".."; }
+  100% { content: "..."; }
+}
 
 .gwr-search-summary {
   display: flex;
@@ -1787,6 +2001,28 @@ body.gwr-modal-open {
     grid-template-columns: 1fr;
   }
 
+  .gwr-payment-status__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .gwr-booking-portal__summary,
+  .gwr-booking-portal__form {
+    grid-template-columns: 1fr;
+  }
+
+  .gwr-booking-portal__list article {
+    display: grid;
+  }
+
+  .gwr-payment-status__actions {
+    display: grid;
+  }
+
+  .gwr-payment-status__actions .gwr-button,
+  .gwr-payment-status__actions .gwr-button-secondary {
+    width: 100%;
+  }
+
   .gwr-toolbar-filter,
   .gwr-sort-control,
   .gwr-sort-control select {
@@ -1828,5 +2064,6 @@ body.gwr-modal-open {
 @media (prefers-reduced-motion: reduce) {
   .gwr-vehicle-card--skeleton i { animation: none; }
   .gwr-modal-loading span { animation: none; }
+  .gwr-payment-status.is-loading [data-gwr-payment-message]::after { animation: none; content: "..."; }
   .gwr-vehicle-card, .gwr-category-shortcut, .gwr-sidebar-section__toggle > span:last-child, .gwr-config-section h3 i, .gwr-config-price-detail button i { transition: none; }
 }

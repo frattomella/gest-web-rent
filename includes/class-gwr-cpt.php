@@ -14,7 +14,7 @@ defined( 'ABSPATH' ) || exit;
  * includes, but the main experience no longer uses a WordPress CPT.
  */
 class GWR_CPT {
-	const DB_VERSION = '1.1.0';
+	const DB_VERSION = '1.7.0';
 	const POST_TYPE  = 'gwr_vehicle';
 
 	/**
@@ -107,6 +107,13 @@ class GWR_CPT {
 			weekend_price decimal(10,2) NULL,
 			weekly_price decimal(10,2) NULL,
 			monthly_price decimal(10,2) NULL,
+			minimum_price decimal(10,2) NULL,
+			hourly_price decimal(10,2) NULL,
+			vehicle_tax_rate decimal(5,2) NULL,
+			price_list_code varchar(80) NULL,
+			tariff_band varchar(80) NULL,
+			pricing_priority int NOT NULL DEFAULT 0,
+			price_on_request tinyint(1) NOT NULL DEFAULT 0,
 			deposit decimal(10,2) NULL,
 			deductible varchar(190) NULL,
 			included_km_daily int unsigned NULL,
@@ -273,6 +280,13 @@ class GWR_CPT {
 			'weekend_price'          => '',
 			'weekly_price'           => '',
 			'monthly_price'          => '',
+			'minimum_price'          => '',
+			'hourly_price'           => '',
+			'vehicle_tax_rate'       => '',
+			'price_list_code'        => '',
+			'tariff_band'            => '',
+			'pricing_priority'       => 0,
+			'price_on_request'       => 0,
 			'deposit'                => '',
 			'deductible'             => '',
 			'included_km_daily'      => '',
@@ -339,6 +353,13 @@ class GWR_CPT {
 			'weekend_price'          => self::sanitize_decimal( $input['weekend_price'] ?? '' ),
 			'weekly_price'           => self::sanitize_decimal( $input['weekly_price'] ?? '' ),
 			'monthly_price'          => self::sanitize_decimal( $input['monthly_price'] ?? '' ),
+			'minimum_price'          => self::sanitize_decimal( $input['minimum_price'] ?? '' ),
+			'hourly_price'           => self::sanitize_decimal( $input['hourly_price'] ?? '' ),
+			'vehicle_tax_rate'       => self::sanitize_decimal( $input['vehicle_tax_rate'] ?? '' ),
+			'price_list_code'        => isset( $input['price_list_code'] ) ? strtoupper( preg_replace( '/[^A-Z0-9_-]/', '', sanitize_text_field( $input['price_list_code'] ) ) ) : '',
+			'tariff_band'            => isset( $input['tariff_band'] ) ? sanitize_text_field( $input['tariff_band'] ) : '',
+			'pricing_priority'       => isset( $input['pricing_priority'] ) ? intval( $input['pricing_priority'] ) : 0,
+			'price_on_request'       => ! empty( $input['price_on_request'] ) ? 1 : 0,
 			'deposit'                => self::sanitize_decimal( $input['deposit'] ?? '' ),
 			'deductible'             => isset( $input['deductible'] ) ? sanitize_text_field( $input['deductible'] ) : '',
 			'included_km_daily'      => isset( $input['included_km_daily'] ) ? absint( $input['included_km_daily'] ) : 0,
@@ -406,7 +427,7 @@ class GWR_CPT {
 	private static function vehicle_formats() {
 		return array(
 			'%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%s', '%s',
-			'%f', '%f', '%f', '%f', '%f', '%s', '%d', '%d', '%d', '%f', '%d', '%d',
+			'%f', '%f', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%d', '%d', '%f', '%s', '%d', '%d', '%d', '%f', '%d', '%d',
 			'%s', '%d', '%d', '%d', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%d',
 		);
 	}
@@ -996,6 +1017,13 @@ class GWR_CPT {
 			'weekend_price'          => self::format_price( $vehicle['weekend_price'] ),
 			'weekly_price'           => self::format_price( $vehicle['weekly_price'] ),
 			'monthly_price'          => self::format_price( $vehicle['monthly_price'] ),
+			'minimum_price'          => self::format_price( $vehicle['minimum_price'] ?? '' ),
+			'hourly_price'           => self::format_price( $vehicle['hourly_price'] ?? '' ),
+			'vehicle_tax_rate'       => $vehicle['vehicle_tax_rate'] ?? '',
+			'price_list_code'        => $vehicle['price_list_code'] ?? '',
+			'tariff_band'            => $vehicle['tariff_band'] ?? '',
+			'pricing_priority'       => $vehicle['pricing_priority'] ?? 0,
+			'price_on_request'       => ! empty( $vehicle['price_on_request'] ),
 			'deposit'                => self::format_price( $vehicle['deposit'] ),
 			'deductible'             => $vehicle['deductible'],
 			'included_km_daily'      => $vehicle['included_km_daily'],

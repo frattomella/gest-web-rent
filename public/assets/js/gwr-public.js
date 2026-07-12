@@ -336,6 +336,21 @@
     return '<label class="gwr-booking-field" for="' + id + '"><span>' + escapeHtml(label) + (required ? ' <b aria-hidden="true">*</b>' : '') + '</span><input id="' + id + '" type="' + escapeHtml(type || 'text') + '" name="' + escapeHtml(name) + '"' + (required ? ' required aria-required="true"' : '') + (attributes || '') + ' /><small data-gwr-booking-field-error></small></label>';
   }
 
+  function paymentMethodMarkup() {
+    var methods = ((catalogConfig().booking || {}).paymentMethods || []);
+    if (!methods.length) methods = [{ id: 'request', label: 'Solo richiesta', default: true }];
+    return methods.map(function (method, index) {
+      return '<label class="gwr-booking-consent"><input type="radio" name="payment_method" value="' + escapeHtml(method.id) + '"' + (method.default || index === 0 ? ' checked' : '') + ' /><span><strong>' + escapeHtml(method.label) + '</strong><small data-gwr-payment-method-note="' + escapeHtml(method.id) + '">' + escapeHtml(paymentMethodNote(method.id)) + '</small></span></label>';
+    }).join('');
+  }
+
+  function paymentMethodNote(method) {
+    if (method === 'stripe') return 'Pagamento sicuro su Stripe Checkout.';
+    if (method === 'bank_transfer') return 'Riceverai le coordinate e la prenotazione restera in attesa di verifica.';
+    if (method === 'pickup') return 'Il saldo sara gestito al ritiro secondo le condizioni.';
+    return 'Invia la richiesta senza pagamento online.';
+  }
+
   function bookingFlowMarkup(vehicle, dates, generalTerms, documents, cancellationPolicy) {
     var termsUrl = safeHttpUrl(generalTerms.terms_url || '');
     var privacyUrl = safeHttpUrl((catalogConfig().booking || {}).privacyUrl || '');
@@ -363,6 +378,7 @@
       '<input type="text" name="website" value="" class="gwr-booking-honeypot" tabindex="-1" autocomplete="off" aria-hidden="true" />',
       '<div class="gwr-booking-actions"><button type="button" class="gwr-button-secondary" data-gwr-booking-back="1">Indietro</button><button type="button" class="gwr-button" data-gwr-booking-next="3">Continua al riepilogo</button></div></section>',
       '<section class="gwr-booking-step" data-gwr-booking-step="3" hidden><header><span>Verifica finale</span><h3>Controlla e conferma la richiesta</h3><p>Il prezzo definitivo viene ricalcolato dal server prima del salvataggio.</p></header><div class="gwr-booking-review" data-gwr-booking-review></div>',
+      '<fieldset><legend>Pagamento</legend><div class="gwr-booking-consents">' + paymentMethodMarkup() + '</div><div class="gwr-booking-grid"><label class="gwr-booking-field"><span>Coupon</span><input type="text" name="coupon_code" autocomplete="off" inputmode="text" /><small>Validazione e sconto vengono ricalcolati dal server.</small></label></div></fieldset>',
       requiredDocuments.length ? '<fieldset><legend>Documenti richiesti</legend><p>Confermo di essere in possesso di:</p><div class="gwr-booking-consents">' + documentMarkup + '</div></fieldset>' : '',
       '<fieldset><legend>Consensi</legend><div class="gwr-booking-consents"><label class="gwr-booking-consent"><input type="checkbox" name="consent_privacy" value="1" required /><span>Accetto l informativa privacy' + (privacyUrl ? ' <a href="' + escapeHtml(privacyUrl) + '" target="_blank" rel="noopener noreferrer">consulta</a>' : '') + ' <strong>(obbligatorio)</strong></span></label><label class="gwr-booking-consent"><input type="checkbox" name="consent_terms" value="1" required /><span>Accetto le condizioni generali' + (termsUrl ? ' <a href="' + escapeHtml(termsUrl) + '" target="_blank" rel="noopener noreferrer">consulta</a>' : '') + ' <strong>(obbligatorio)</strong></span></label><label class="gwr-booking-consent"><input type="checkbox" name="consent_cancellation" value="1" /><span>Dichiaro di aver letto la politica di cancellazione' + (cancellationUrl ? ' <a href="' + escapeHtml(cancellationUrl) + '" target="_blank" rel="noopener noreferrer">consulta</a>' : '') + '</span></label><label class="gwr-booking-consent"><input type="checkbox" name="consent_marketing" value="1" /><span>Acconsento a comunicazioni commerciali <small>(facoltativo)</small></span></label><label class="gwr-booking-consent"><input type="checkbox" name="consent_third_party" value="1" /><span>Acconsento alla comunicazione a terzi quando necessaria al servizio <small>(facoltativo)</small></span></label></div></fieldset>',
       '<div class="gwr-booking-actions"><button type="button" class="gwr-button-secondary" data-gwr-booking-back="1">Modifica veicolo o extra</button><button type="button" class="gwr-button-secondary" data-gwr-booking-back="2">Modifica dati</button><button type="submit" class="gwr-button" data-gwr-booking-submit>Conferma prenotazione</button></div></section>',
@@ -589,7 +605,9 @@
     var customer = [data.get('customer_first_name'), data.get('customer_last_name')].filter(Boolean).join(' ');
     var driver = data.get('driver_same') ? customer : [data.get('driver_first_name'), data.get('driver_last_name')].filter(Boolean).join(' ');
     var estimate = qs(modal, '[data-gwr-summary-total]');
-    review.innerHTML = '<div class="gwr-booking-review__grid"><div><span>Veicolo</span><strong>' + escapeHtml(vehicle.title || [vehicle.brand, vehicle.model].filter(Boolean).join(' ')) + '</strong></div><div><span>Periodo</span><strong>' + escapeHtml(isoToItalianDate(dates.start_date) + ' ' + dates.pickup_time + ' - ' + isoToItalianDate(dates.end_date) + ' ' + dates.return_time) + '</strong></div><div><span>Localita</span><strong>' + escapeHtml((dates.pickup_location || vehicle.location) + ' - ' + (dates.return_location || dates.pickup_location || vehicle.location)) + '</strong></div><div><span>Cliente</span><strong>' + escapeHtml(customer) + '</strong></div><div><span>Conducente</span><strong>' + escapeHtml(driver) + '</strong></div><div><span>Stima frontend</span><strong>' + escapeHtml(estimate ? estimate.textContent : 'Ricalcolo al server') + '</strong></div></div>' + (options.labels.length ? '<div class="gwr-booking-review__options"><span>Extra e coperture</span><ul>' + options.labels.map(function (label) { return '<li>' + escapeHtml(label) + '</li>'; }).join('') + '</ul></div>' : '');
+    var method = data.get('payment_method') || 'request';
+    var coupon = String(data.get('coupon_code') || '').trim();
+    review.innerHTML = '<div class="gwr-booking-review__grid"><div><span>Veicolo</span><strong>' + escapeHtml(vehicle.title || [vehicle.brand, vehicle.model].filter(Boolean).join(' ')) + '</strong></div><div><span>Periodo</span><strong>' + escapeHtml(isoToItalianDate(dates.start_date) + ' ' + dates.pickup_time + ' - ' + isoToItalianDate(dates.end_date) + ' ' + dates.return_time) + '</strong></div><div><span>Localita</span><strong>' + escapeHtml((dates.pickup_location || vehicle.location) + ' - ' + (dates.return_location || dates.pickup_location || vehicle.location)) + '</strong></div><div><span>Cliente</span><strong>' + escapeHtml(customer) + '</strong></div><div><span>Conducente</span><strong>' + escapeHtml(driver) + '</strong></div><div><span>Stima</span><strong>' + escapeHtml(estimate ? estimate.textContent : 'Ricalcolo al server') + '</strong></div><div><span>Metodo</span><strong>' + escapeHtml(paymentMethodNote(method)) + '</strong></div><div><span>Coupon</span><strong>' + escapeHtml(coupon || 'Nessuno') + '</strong></div></div>' + (options.labels.length ? '<div class="gwr-booking-review__options"><span>Extra e coperture</span><ul>' + options.labels.map(function (label) { return '<li>' + escapeHtml(label) + '</li>'; }).join('') + '</ul></div>' : '');
   }
 
   function bookingPayload(modal) {
@@ -603,7 +621,7 @@
       pickup_location: context.dates.pickup_location || context.vehicle.location || '',
       return_location: context.dates.different_return === '1' ? (context.dates.return_location || '') : (context.dates.pickup_location || context.vehicle.location || ''),
       start_date: context.dates.start_date, end_date: context.dates.end_date, pickup_time: context.dates.pickup_time, return_time: context.dates.return_time,
-      form_started_at: context.startedAt, website: value('website'), driver_same: !!data.get('driver_same'), selection: { extras: options.extras, coverages: options.coverages }, document_confirmations: data.getAll('document_confirmation'),
+      form_started_at: context.startedAt, website: value('website'), coupon_code: value('coupon_code'), payment_method: value('payment_method'), driver_same: !!data.get('driver_same'), selection: { extras: options.extras, coverages: options.coverages }, document_confirmations: data.getAll('document_confirmation'),
       customer: { customer_type:value('customer_type'), first_name:value('customer_first_name'), last_name:value('customer_last_name'), email:value('customer_email'), phone:value('customer_phone'), tax_code:value('customer_tax_code'), birth_date:value('customer_birth_date'), birth_place:value('customer_birth_place'), nationality:value('customer_nationality'), address:value('customer_address'), postal_code:value('customer_postal_code'), city:value('customer_city'), province:value('customer_province'), country:value('customer_country'), company_name:value('company_name'), vat_number:value('vat_number'), company_tax_code:value('company_tax_code'), pec:value('pec'), recipient_code:value('recipient_code'), registered_office:value('registered_office'), contact_person:value('contact_person'), notes:value('customer_notes') },
       driver: { first_name:value('driver_first_name'), last_name:value('driver_last_name'), birth_date:value('driver_birth_date'), birth_place:value('driver_birth_place'), nationality:value('driver_nationality'), tax_code:value('driver_tax_code'), email:value('driver_email'), phone:value('driver_phone'), address:value('driver_address'), license_type:value('license_type'), license_number:value('license_number'), license_country:value('license_country'), license_issue_date:value('license_issue_date'), license_expiry_date:value('license_expiry_date'), international_license:!!data.get('international_license'), notes:value('driver_notes') },
       consents: { privacy:!!data.get('consent_privacy'), terms:!!data.get('consent_terms'), cancellation:!!data.get('consent_cancellation'), marketing:!!data.get('consent_marketing'), third_party:!!data.get('consent_third_party') }
@@ -626,7 +644,7 @@
       var title = qs(form, '[data-gwr-confirmation-title]');
       var summary = qs(form, '[data-gwr-confirmation-summary]');
       if (title) title.textContent = 'Prenotazione ' + confirmation.booking_code;
-      if (summary) summary.innerHTML = '<div><span>Codice</span><strong>' + escapeHtml(confirmation.booking_code) + '</strong></div><div><span>Stato</span><strong>' + escapeHtml(confirmation.status) + '</strong></div><div><span>Veicolo</span><strong>' + escapeHtml(confirmation.vehicle) + '</strong></div><div><span>Periodo</span><strong>' + escapeHtml(confirmation.period) + '</strong></div><div><span>Totale server</span><strong>' + escapeHtml(confirmation.total) + '</strong></div>';
+      if (summary) summary.innerHTML = '<div><span>Codice</span><strong>' + escapeHtml(confirmation.booking_code) + '</strong></div><div><span>Stato</span><strong>' + escapeHtml(confirmation.status) + '</strong></div><div><span>Veicolo</span><strong>' + escapeHtml(confirmation.vehicle) + '</strong></div><div><span>Periodo</span><strong>' + escapeHtml(confirmation.period) + '</strong></div><div><span>Totale noleggio</span><strong>' + escapeHtml(confirmation.total) + '</strong></div><div><span>Da pagare ora</span><strong>' + escapeHtml(confirmation.pay_now || '') + '</strong></div><div><span>Saldo al ritiro</span><strong>' + escapeHtml(confirmation.pay_later || '') + '</strong></div><div><span>Deposito cauzionale al ritiro</span><strong>' + escapeHtml(confirmation.deposit || '') + '</strong></div>';
       var whatsapp = qs(form, '[data-gwr-confirmation-whatsapp]');
       var number = String((catalogConfig().contact || {}).whatsappNumber || '').replace(/\D/g, '');
       var formData = new FormData(form);
@@ -635,9 +653,117 @@
       setBookingStep(modal, 4);
       activeBookingContext = null;
       form.dataset.submitting = '0';
+      if (confirmation.redirect_url) {
+        window.location.href = confirmation.redirect_url;
+      }
     }).catch(function (error) {
       form.dataset.submitting = '0'; button.disabled = false; button.textContent = 'Conferma prenotazione'; showBookingError(form, error.message || 'Errore durante l invio. Riprova.', '');
     });
+  }
+
+  function paymentStatusMessage(data, fallback) {
+    if (!data) return fallback || 'Stato non disponibile.';
+    if (data.payment_status === 'paid') return 'Pagamento confermato. La prenotazione e stata aggiornata dal server.';
+    if (data.payment_status === 'failed') return 'Pagamento non completato. Puoi riprovare se la prenotazione e ancora valida.';
+    if (data.payment_status === 'expired' || data.booking_status === 'expired') return 'Prenotazione scaduta: la disponibilita e stata rilasciata.';
+    if (data.payment_status === 'refunded' || data.payment_status === 'partially_refunded') return 'Rimborso registrato sulla prenotazione.';
+    if (data.payment_status === 'pending' || data.payment_status === 'processing') return 'Pagamento in verifica. Aggiorna lo stato tra qualche istante.';
+    if (data.payment_status === 'not_required') return 'Nessun pagamento online richiesto per questa prenotazione.';
+    return fallback || 'Stato aggiornato.';
+  }
+
+  function canRetryPayment(data) {
+    if (!data || data.payment_method !== 'stripe') return false;
+    if (data.payment_status === 'paid' || data.payment_status === 'refunded' || data.payment_status === 'partially_refunded') return false;
+    return ['pending', 'awaiting_payment', 'payment_failed'].indexOf(data.booking_status) !== -1;
+  }
+
+  function renderPaymentStatus(panel, data, fallback, isError) {
+    var message = qs(panel, '[data-gwr-payment-message]');
+    var summary = qs(panel, '[data-gwr-payment-summary]');
+    var retry = qs(panel, '[data-gwr-payment-retry]');
+    if (message) {
+      message.textContent = isError ? fallback : paymentStatusMessage(data, fallback);
+    }
+    if (summary) {
+      if (data) {
+        panel.dataset.paymentMethod = data.payment_method || '';
+        summary.innerHTML = '<div><span>Codice</span><strong>' + escapeHtml(data.booking_code || '') + '</strong></div><div><span>Pratica</span><strong>' + escapeHtml(data.booking_status_label || data.booking_status || '') + '</strong></div><div><span>Pagamento</span><strong>' + escapeHtml(data.payment_status || '') + '</strong></div><div><span>Totale</span><strong>' + escapeHtml(data.total || '') + '</strong></div><div><span>Da pagare ora</span><strong>' + escapeHtml(data.pay_now || '') + '</strong></div><div><span>Saldo</span><strong>' + escapeHtml(data.pay_later || '') + '</strong></div>';
+      } else if (isError) {
+        summary.innerHTML = '';
+      }
+    }
+    if (retry) retry.hidden = !canRetryPayment(data);
+  }
+
+  function refreshPaymentStatus(panel) {
+    var code = panel.getAttribute('data-booking-code') || '';
+    var token = panel.getAttribute('data-booking-token') || '';
+    var button = qs(panel, '[data-gwr-payment-refresh]');
+    if (!code) {
+      renderPaymentStatus(panel, null, 'Codice prenotazione mancante.', true);
+      return;
+    }
+    if (button) button.disabled = true;
+    panel.classList.add('is-loading');
+    var body = new URLSearchParams();
+    body.set('action', 'gwr_payment_status');
+    body.set('nonce', catalogConfig().nonce || '');
+    body.set('booking_code', code);
+    body.set('booking_token', token);
+    window.fetch(catalogConfig().ajaxUrl, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}, body:body.toString() }).then(function (response) { return response.json(); }).then(function (payload) {
+      if (!payload || !payload.success) throw new Error(payload && payload.data && payload.data.message ? payload.data.message : 'Impossibile verificare il pagamento.');
+      renderPaymentStatus(panel, payload.data, 'Stato aggiornato.', false);
+      if (panel.getAttribute('data-payment-state') === 'success' && ['pending', 'processing'].indexOf(payload.data.payment_status) !== -1) {
+        var attempts = Number(panel.getAttribute('data-status-attempts') || '0');
+        if (attempts < 4) {
+          panel.setAttribute('data-status-attempts', String(attempts + 1));
+          window.setTimeout(function () { refreshPaymentStatus(panel); }, 2500);
+        }
+      }
+    }).catch(function (error) {
+      renderPaymentStatus(panel, null, error.message || 'Errore durante la verifica.', true);
+    }).finally(function () {
+      panel.classList.remove('is-loading');
+      if (button) button.disabled = false;
+    });
+  }
+
+  function retryPayment(panel) {
+    var code = panel.getAttribute('data-booking-code') || '';
+    var token = panel.getAttribute('data-booking-token') || '';
+    var button = qs(panel, '[data-gwr-payment-retry]');
+    if (!code || !token) {
+      renderPaymentStatus(panel, null, 'Dati prenotazione insufficienti per riprovare.', true);
+      return;
+    }
+    if (button) button.disabled = true;
+    var body = new URLSearchParams();
+    body.set('action', 'gwr_retry_payment');
+    body.set('nonce', catalogConfig().nonce || '');
+    body.set('booking_code', code);
+    body.set('booking_token', token);
+    body.set('payment_method', panel.dataset.paymentMethod || 'stripe');
+    window.fetch(catalogConfig().ajaxUrl, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}, body:body.toString() }).then(function (response) { return response.json(); }).then(function (payload) {
+      if (!payload || !payload.success) throw new Error(payload && payload.data && payload.data.message ? payload.data.message : 'Impossibile riaprire il pagamento.');
+      if (payload.data.redirect_url) {
+        window.location.href = payload.data.redirect_url;
+        return;
+      }
+      refreshPaymentStatus(panel);
+    }).catch(function (error) {
+      renderPaymentStatus(panel, null, error.message || 'Errore durante il retry.', true);
+    }).finally(function () {
+      if (button) button.disabled = false;
+    });
+  }
+
+  function initPaymentStatus(panel) {
+    var refresh = qs(panel, '[data-gwr-payment-refresh]');
+    var retry = qs(panel, '[data-gwr-payment-retry]');
+    if (refresh) refresh.addEventListener('click', function () { refreshPaymentStatus(panel); });
+    if (retry) retry.addEventListener('click', function () { retryPayment(panel); });
+    refreshPaymentStatus(panel);
   }
 
   function renderModalContent(vehicle, dates) {
@@ -1471,6 +1597,9 @@
     if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
 
-  function boot() { qsa(document, '[data-gwr-catalog]').forEach(initCatalog); }
+  function boot() {
+    qsa(document, '[data-gwr-catalog]').forEach(initCatalog);
+    qsa(document, '[data-gwr-payment-status]').forEach(initPaymentStatus);
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

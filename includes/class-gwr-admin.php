@@ -81,6 +81,7 @@ class GWR_Admin {
 		add_submenu_page( 'gest-web-rent', __( 'Disponibilita', 'gest-web-rent' ), __( 'Disponibilita', 'gest-web-rent' ), 'manage_options', 'gwr-availability', array( __CLASS__, 'availability_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Prenotazioni', 'gest-web-rent' ), __( 'Prenotazioni', 'gest-web-rent' ), 'manage_options', 'gwr-bookings', array( 'GWR_Bookings_Admin', 'list_page' ) );
 		add_submenu_page( null, __( 'Dettaglio prenotazione', 'gest-web-rent' ), __( 'Dettaglio prenotazione', 'gest-web-rent' ), 'manage_options', 'gwr-booking-detail', array( 'GWR_Bookings_Admin', 'detail_page' ) );
+		add_submenu_page( 'gest-web-rent', __( 'Documenti', 'gest-web-rent' ), __( 'Documenti', 'gest-web-rent' ), 'manage_options', 'gwr-documents', array( 'GWR_Documents_Admin', 'page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Condizioni di noleggio', 'gest-web-rent' ), __( 'Condizioni di noleggio', 'gest-web-rent' ), 'manage_options', 'gwr-rental-terms', array( 'GWR_Rental_Terms_Admin', 'page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Impostazioni', 'gest-web-rent' ), __( 'Impostazioni', 'gest-web-rent' ), 'manage_options', 'gwr-settings', array( __CLASS__, 'settings_page' ) );
 	}
@@ -114,6 +115,9 @@ class GWR_Admin {
 				'newRow' => __( 'Nuova voce', 'gest-web-rent' ),
 				'global' => __( 'Globale', 'gest-web-rent' ),
 				'custom' => __( 'Personalizzato', 'gest-web-rent' ),
+				'documentLogoTitle' => __( 'Seleziona logo documenti', 'gest-web-rent' ),
+				'documentLogoButton' => __( 'Usa questo logo', 'gest-web-rent' ),
+				'signatureRequired' => __( 'Disegna la firma prima di salvare.', 'gest-web-rent' ),
 			)
 		);
 	}
@@ -541,7 +545,14 @@ class GWR_Admin {
 		self::field( 'weekend_price', __( 'Prezzo weekend', 'gest-web-rent' ), $vehicle['weekend_price'], 'number', '199' );
 		self::field( 'weekly_price', __( 'Prezzo settimanale', 'gest-web-rent' ), $vehicle['weekly_price'], 'number', '490' );
 		self::field( 'monthly_price', __( 'Prezzo mensile', 'gest-web-rent' ), $vehicle['monthly_price'], 'number', '1490' );
+		self::field( 'minimum_price', __( 'Prezzo minimo', 'gest-web-rent' ), $vehicle['minimum_price'] ?? '', 'number', '120' );
+		self::field( 'hourly_price', __( 'Costo orario opzionale', 'gest-web-rent' ), $vehicle['hourly_price'] ?? '', 'number', '15' );
+		self::field( 'vehicle_tax_rate', __( 'IVA veicolo %', 'gest-web-rent' ), $vehicle['vehicle_tax_rate'] ?? '', 'number', '22' );
+		self::field( 'price_list_code', __( 'Listino associato', 'gest-web-rent' ), $vehicle['price_list_code'] ?? '', 'text', 'STANDARD' );
+		self::field( 'tariff_band', __( 'Fascia tariffaria', 'gest-web-rent' ), $vehicle['tariff_band'] ?? '', 'text', 'A' );
+		self::field( 'pricing_priority', __( 'Priorita regole', 'gest-web-rent' ), $vehicle['pricing_priority'] ?? 0, 'number', '0' );
 		self::field( 'deposit', __( 'Cauzione', 'gest-web-rent' ), $vehicle['deposit'], 'number', '500' );
+		self::checkbox( 'price_on_request', __( 'Prezzo su richiesta', 'gest-web-rent' ), $vehicle['price_on_request'] ?? 0 );
 		echo '</div>';
 		self::section_close();
 
@@ -729,6 +740,9 @@ class GWR_Admin {
 			'add'          => array( 'label' => __( 'Aggiungi veicolo', 'gest-web-rent' ), 'url' => self::vehicle_edit_url() ),
 			'availability' => array( 'label' => __( 'Disponibilita', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-availability' ) ),
 			'bookings'     => array( 'label' => __( 'Prenotazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-bookings' ) ),
+			'documents'    => array( 'label' => __( 'Documenti', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-documents' ) ),
+			'pricing'      => array( 'label' => __( 'Tariffe', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-pricing' ) ),
+			'payments'     => array( 'label' => __( 'Pagamenti', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-payments' ) ),
 			'terms'        => array( 'label' => __( 'Condizioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-rental-terms' ) ),
 			'settings'     => array( 'label' => __( 'Impostazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-settings' ) ),
 		);

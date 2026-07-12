@@ -604,25 +604,172 @@
 .gwr-inline-status.is-pending { background: #fff7d6; color: #7a5200; border-color: #f7df85; }
 .gwr-inline-status.is-confirmed,
 .gwr-inline-status.is-delivered,
-.gwr-inline-status.is-in_progress { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.gwr-inline-status.is-in_progress,
+.gwr-inline-status.is-paid { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
 .gwr-inline-status.is-rejected,
 .gwr-inline-status.is-cancelled,
 .gwr-inline-status.is-expired,
-.gwr-inline-status.is-no_show { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+.gwr-inline-status.is-no_show,
+.gwr-inline-status.is-failed,
+.gwr-inline-status.is-payment_failed { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
 .gwr-inline-status.is-returned,
-.gwr-inline-status.is-completed { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
+.gwr-inline-status.is-completed,
+.gwr-inline-status.is-processing,
+.gwr-inline-status.is-partially_refunded { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
+.gwr-inline-status.is-awaiting_payment,
+.gwr-inline-status.is-awaiting_bank_transfer,
+.gwr-inline-status.is-created { background: #fff7d6; color: #7a5200; border-color: #f7df85; }
+.gwr-inline-status.is-refunded,
+.gwr-inline-status.is-disputed { background: #f3e8ff; color: #6b21a8; border-color: #e9d5ff; }
+
+.gwr-documents-panel {
+  scroll-margin-top: 24px;
+}
+
+.gwr-document-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.gwr-document-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--gwr-border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fff, #f8fbff);
+}
+
+.gwr-document-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gwr-document-card h3 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--gwr-ink);
+}
+
+.gwr-document-card p {
+  margin: 5px 0 0;
+  color: var(--gwr-muted);
+}
+
+.gwr-document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.gwr-document-actions form {
+  margin: 0;
+}
+
+.gwr-signature-details {
+  padding: 12px;
+  border: 1px dashed var(--gwr-border-strong);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.gwr-signature-details summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--gwr-accent-strong);
+}
+
+.gwr-signature-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.gwr-signature-canvas {
+  width: 100%;
+  max-width: 620px;
+  height: 180px;
+  border: 1px solid var(--gwr-border-strong);
+  border-radius: 12px;
+  background: #fff;
+  touch-action: none;
+}
+
+.gwr-attachments-panel,
+.gwr-attachment-upload {
+  display: grid;
+  gap: 14px;
+}
+
+.gwr-attachment-upload {
+  grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 1fr) minmax(150px, .6fr) auto;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid var(--gwr-border);
+  border-radius: 18px;
+  background: #f8fbff;
+}
+
+.gwr-document-logo-preview {
+  display: grid;
+  place-items: center;
+  width: 180px;
+  min-height: 92px;
+  padding: 10px;
+  border: 1px dashed var(--gwr-border-strong);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.gwr-document-logo-preview:empty::before {
+  content: "Logo";
+  color: var(--gwr-muted);
+  font-weight: 800;
+}
+
+.gwr-document-logo-preview img {
+  max-width: 100%;
+  max-height: 86px;
+  object-fit: contain;
+}
+
+.gwr-inline-status.is-generated,
+.gwr-inline-status.is-sent,
+.gwr-inline-status.is-signed {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.gwr-inline-status.is-invalidated,
+.gwr-inline-status.is-archived {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.gwr-muted {
+  color: var(--gwr-muted);
+}
 
 @media (max-width: 1280px) {
   .gwr-booking-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .gwr-booking-detail-grid { grid-template-columns: 1fr; }
   .gwr-booking-detail-side { position: static; }
+  .gwr-attachment-upload { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 700px) {
   .gwr-booking-filters,
   .gwr-booking-kpis,
-  .gwr-booking-price-grid { grid-template-columns: 1fr; }
+  .gwr-booking-price-grid,
+  .gwr-document-type-grid { grid-template-columns: 1fr; }
   .gwr-booking-timeline article { grid-template-columns: 1fr; gap: 5px; }
+  .gwr-document-card header { display: grid; }
 }
 
 .gwr-terms-form,
@@ -663,6 +810,11 @@
   background: #eaf1ff;
   outline: none;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
+
+.gwr-terms-tabs a.is-active {
+  color: #fff;
+  background: var(--gwr-accent-strong);
 }
 
 .gwr-terms-section {

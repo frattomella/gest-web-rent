@@ -15,12 +15,19 @@ class GWR_Frontend {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'register_assets' ) );
 		add_shortcode( 'gwr_catalog', array( __CLASS__, 'catalog_shortcode' ) );
 		add_shortcode( 'gest_web_rent_catalog', array( __CLASS__, 'catalog_shortcode' ) );
+		add_shortcode( 'gwr_payment_status', array( __CLASS__, 'payment_status_shortcode' ) );
+		add_shortcode( 'gwr_booking_portal', array( __CLASS__, 'booking_portal_shortcode' ) );
+		add_filter( 'the_content', array( __CLASS__, 'maybe_prepend_payment_status' ), 8 );
 		add_action( 'wp_ajax_gwr_filter_catalog', array( __CLASS__, 'ajax_filter_catalog' ) );
 		add_action( 'wp_ajax_nopriv_gwr_filter_catalog', array( __CLASS__, 'ajax_filter_catalog' ) );
 		add_action( 'wp_ajax_gwr_vehicle_detail', array( __CLASS__, 'ajax_vehicle_detail' ) );
 		add_action( 'wp_ajax_nopriv_gwr_vehicle_detail', array( __CLASS__, 'ajax_vehicle_detail' ) );
 		add_action( 'wp_ajax_gwr_create_booking', array( __CLASS__, 'ajax_create_booking' ) );
 		add_action( 'wp_ajax_nopriv_gwr_create_booking', array( __CLASS__, 'ajax_create_booking' ) );
+		add_action( 'wp_ajax_gwr_payment_status', array( __CLASS__, 'ajax_payment_status' ) );
+		add_action( 'wp_ajax_nopriv_gwr_payment_status', array( __CLASS__, 'ajax_payment_status' ) );
+		add_action( 'wp_ajax_gwr_retry_payment', array( __CLASS__, 'ajax_retry_payment' ) );
+		add_action( 'wp_ajax_nopriv_gwr_retry_payment', array( __CLASS__, 'ajax_retry_payment' ) );
 	}
 
 	/** Validate and create a booking request. */
@@ -37,12 +44,81 @@ class GWR_Frontend {
 			$data = $result->get_error_data();
 			wp_send_json_error( array( 'message' => $result->get_error_message(), 'code' => $result->get_error_code(), 'field' => is_array( $data ) ? ( $data['field'] ?? '' ) : '' ), 400 );
 		}
+		$payment = GWR_Payment_Service::start_payment_for_booking( $result, $raw['payment_method'] ?? '' );
+		if ( is_wp_error( $payment ) ) {
+			wp_send_json_error( array( 'message' => $payment->get_error_message(), 'code' => $payment->get_error_code(), 'booking_code' => $result['booking_code'] ), 400 );
+		}
 		wp_send_json_success( array(
 			'booking_code' => $result['booking_code'],
+			'booking_token' => sanitize_text_field( $result['public_token'] ?? '' ),
 			'status' => GWR_Bookings::statuses()[ $result['status'] ] ?? $result['status'],
 			'vehicle' => $result['vehicle_title'],
 			'period' => GWR_Bookings::format_datetime( $result['pickup_datetime'] ) . ' - ' . GWR_Bookings::format_datetime( $result['return_datetime'] ),
 			'total' => GWR_Bookings::format_money( $result['total_amount'], $result['currency'] ),
+			'pay_now' => GWR_Bookings::format_money( $result['pay_now_amount'], $result['currency'] ),
+			'pay_later' => GWR_Bookings::format_money( $result['pay_later_amount'], $result['currency'] ),
+			'deposit' => GWR_Bookings::format_money( $result['deposit_amount'], $result['currency'] ),
+			'payment_method' => sanitize_key( $payment['method'] ?? ( $result['payment_method'] ?? 'request' ) ),
+			'payment_required' => ! empty( $payment['required'] ),
+			'redirect_url' => esc_url_raw( $payment['redirect_url'] ?? '' ),
+			'bank' => $payment['bank'] ?? null,
+		) );
+	}
+
+	/** Return the trusted payment state for a booking/session lookup. */
+	public static function ajax_payment_status() {
+		check_ajax_referer( 'gwr_catalog_nonce', 'nonce' );
+		$code = isset( $_POST['booking_code'] ) ? sanitize_text_field( wp_unslash( $_POST['booking_code'] ) ) : '';
+		$token = isset( $_POST['booking_token'] ) ? sanitize_text_field( wp_unslash( $_POST['booking_token'] ) ) : '';
+		if ( ! $code ) {
+			wp_send_json_error( array( 'message' => __( 'Codice prenotazione mancante.', 'gest-web-rent' ) ), 400 );
+		}
+		$booking = self::booking_by_code( $code );
+		if ( ! $booking ) {
+			wp_send_json_error( array( 'message' => __( 'Prenotazione non trovata.', 'gest-web-rent' ) ), 404 );
+		}
+		if ( ! current_user_can( 'manage_options' ) && ! GWR_Bookings::verify_public_token( $booking, $token ) ) {
+			wp_send_json_error( array( 'message' => __( 'Token prenotazione non valido.', 'gest-web-rent' ) ), 403 );
+		}
+		wp_send_json_success( array(
+			'booking_code' => $booking['booking_code'],
+			'booking_status' => $booking['status'],
+			'booking_status_label' => GWR_Bookings::statuses()[ $booking['status'] ] ?? $booking['status'],
+			'payment_status' => $booking['payment_status'],
+			'payment_method' => $booking['payment_method'],
+			'total' => GWR_Bookings::format_money( $booking['total_amount'], $booking['currency'] ),
+			'pay_now' => GWR_Bookings::format_money( $booking['pay_now_amount'], $booking['currency'] ),
+			'pay_later' => GWR_Bookings::format_money( $booking['pay_later_amount'], $booking['currency'] ),
+		) );
+	}
+
+	/** Retry a payment from the trusted public token. */
+	public static function ajax_retry_payment() {
+		check_ajax_referer( 'gwr_catalog_nonce', 'nonce' );
+		$code = isset( $_POST['booking_code'] ) ? sanitize_text_field( wp_unslash( $_POST['booking_code'] ) ) : '';
+		$token = isset( $_POST['booking_token'] ) ? sanitize_text_field( wp_unslash( $_POST['booking_token'] ) ) : '';
+		$method = isset( $_POST['payment_method'] ) ? sanitize_key( wp_unslash( $_POST['payment_method'] ) ) : '';
+		if ( ! $code ) {
+			wp_send_json_error( array( 'message' => __( 'Codice prenotazione mancante.', 'gest-web-rent' ) ), 400 );
+		}
+		$booking = self::booking_by_code( $code );
+		if ( ! $booking ) {
+			wp_send_json_error( array( 'message' => __( 'Prenotazione non trovata.', 'gest-web-rent' ) ), 404 );
+		}
+		if ( ! current_user_can( 'manage_options' ) && ! GWR_Bookings::verify_public_token( $booking, $token ) ) {
+			wp_send_json_error( array( 'message' => __( 'Token prenotazione non valido.', 'gest-web-rent' ) ), 403 );
+		}
+		$result = GWR_Payment_Service::retry_payment_for_booking( $booking, $method );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message(), 'code' => $result->get_error_code() ), 400 );
+		}
+		wp_send_json_success( array(
+			'booking_code' => $booking['booking_code'],
+			'payment_method' => sanitize_key( $result['method'] ?? $booking['payment_method'] ),
+			'payment_required' => ! empty( $result['required'] ),
+			'redirect_url' => esc_url_raw( $result['redirect_url'] ?? '' ),
+			'status' => sanitize_key( $result['status'] ?? '' ),
+			'bank' => $result['bank'] ?? null,
 		) );
 	}
 
@@ -60,6 +136,9 @@ class GWR_Frontend {
 	public static function register_assets() {
 		wp_register_style( 'gwr-public', GWR_PLUGIN_URL . 'public/assets/css/gwr-public.css', array(), gwr_asset_version( 'public/assets/css/gwr-public.css' ) );
 		wp_register_script( 'gwr-public', GWR_PLUGIN_URL . 'public/assets/js/gwr-public.js', array(), gwr_asset_version( 'public/assets/js/gwr-public.js' ), true );
+		if ( ! empty( $_GET['gwr_payment'] ) ) {
+			self::enqueue_public_assets();
+		}
 	}
 
 	public static function catalog_shortcode( $atts ) {
@@ -90,6 +169,94 @@ class GWR_Frontend {
 		echo self::modal_markup();
 		echo '</section>';
 		return ob_get_clean();
+	}
+
+	/**
+	 * Payment status block for Stripe success/cancel redirects.
+	 *
+	 * @param array $atts Shortcode attributes.
+	 * @return string
+	 */
+	public static function payment_status_shortcode( $atts = array() ) {
+		self::enqueue_public_assets();
+		$query = is_array( $_GET ) ? wp_unslash( $_GET ) : array();
+		$atts = shortcode_atts( array( 'booking_code' => '', 'booking_token' => '', 'state' => '' ), $atts, 'gwr_payment_status' );
+		$state = sanitize_key( $query['gwr_payment'] ?? $atts['state'] );
+		$code  = sanitize_text_field( $query['booking_code'] ?? $atts['booking_code'] );
+		$token = sanitize_text_field( $query['gwr_token'] ?? ( $query['booking_token'] ?? $atts['booking_token'] ) );
+		$title = 'cancel' === $state ? __( 'Pagamento non completato', 'gest-web-rent' ) : __( 'Verifica pagamento', 'gest-web-rent' );
+		$message = 'cancel' === $state
+			? __( 'Il checkout e stato interrotto. Verifica lo stato o riprova il pagamento dalla stessa prenotazione.', 'gest-web-rent' )
+			: __( 'Stiamo leggendo lo stato reale della prenotazione dal server.', 'gest-web-rent' );
+
+		ob_start();
+		echo '<section class="gwr-payment-status gwr-block" data-gwr-payment-status data-booking-code="' . esc_attr( $code ) . '" data-booking-token="' . esc_attr( $token ) . '" data-payment-state="' . esc_attr( $state ) . '">';
+		echo '<div class="gwr-payment-status__panel">';
+		echo '<span class="gwr-payment-status__eyebrow">' . esc_html__( 'Gest Web Rent', 'gest-web-rent' ) . '</span>';
+		echo '<h2>' . esc_html( $title ) . '</h2>';
+		echo '<p data-gwr-payment-message>' . esc_html( $message ) . '</p>';
+		echo '<div class="gwr-payment-status__summary" data-gwr-payment-summary aria-live="polite"></div>';
+		echo '<div class="gwr-payment-status__actions"><button type="button" class="gwr-button" data-gwr-payment-refresh>' . esc_html__( 'Verifica stato', 'gest-web-rent' ) . '</button><button type="button" class="gwr-button-secondary" data-gwr-payment-retry hidden>' . esc_html__( 'Riprova pagamento', 'gest-web-rent' ) . '</button></div>';
+		echo '</div></section>';
+		return ob_get_clean();
+	}
+
+	/**
+	 * Minimal booking portal with secure document links.
+	 *
+	 * @param array $atts Shortcode attributes.
+	 * @return string
+	 */
+	public static function booking_portal_shortcode( $atts = array() ) {
+		self::enqueue_public_assets();
+		$query = is_array( $_GET ) ? wp_unslash( $_GET ) : array();
+		$atts = shortcode_atts( array( 'booking_code' => '', 'booking_token' => '' ), $atts, 'gwr_booking_portal' );
+		$code = sanitize_text_field( $query['booking_code'] ?? $atts['booking_code'] );
+		$token = sanitize_text_field( $query['gwr_token'] ?? ( $query['booking_token'] ?? $atts['booking_token'] ) );
+		$booking = $code ? self::booking_by_code( $code ) : null;
+
+		ob_start();
+		echo '<section class="gwr-booking-portal gwr-block">';
+		echo '<div class="gwr-booking-portal__panel">';
+		echo '<span class="gwr-payment-status__eyebrow">' . esc_html__( 'Area prenotazione', 'gest-web-rent' ) . '</span>';
+		echo '<h2>' . esc_html__( 'Documenti e stato prenotazione', 'gest-web-rent' ) . '</h2>';
+		if ( ! $booking || ! GWR_Bookings::verify_public_token( $booking, $token ) ) {
+			if ( $code || $token ) {
+				echo '<div class="gwr-booking-portal__alert">' . esc_html__( 'Codice o token non valido.', 'gest-web-rent' ) . '</div>';
+			}
+			echo '<form method="get" class="gwr-booking-portal__form"><label><span>' . esc_html__( 'Codice prenotazione', 'gest-web-rent' ) . '</span><input type="text" name="booking_code" value="' . esc_attr( $code ) . '" required /></label><label><span>' . esc_html__( 'Token prenotazione', 'gest-web-rent' ) . '</span><input type="text" name="gwr_token" value="" required /></label><button class="gwr-button">' . esc_html__( 'Apri area', 'gest-web-rent' ) . '</button></form>';
+			echo '</div></section>';
+			return ob_get_clean();
+		}
+
+		echo '<div class="gwr-booking-portal__summary">';
+		echo '<div><span>' . esc_html__( 'Prenotazione', 'gest-web-rent' ) . '</span><strong>' . esc_html( $booking['booking_code'] ) . '</strong></div>';
+		echo '<div><span>' . esc_html__( 'Stato', 'gest-web-rent' ) . '</span><strong>' . esc_html( GWR_Bookings::statuses()[ $booking['status'] ] ?? $booking['status'] ) . '</strong></div>';
+		echo '<div><span>' . esc_html__( 'Veicolo', 'gest-web-rent' ) . '</span><strong>' . esc_html( $booking['vehicle_title'] ) . '</strong></div>';
+		echo '<div><span>' . esc_html__( 'Periodo', 'gest-web-rent' ) . '</span><strong>' . esc_html( GWR_Bookings::format_datetime( $booking['pickup_datetime'] ) . ' - ' . GWR_Bookings::format_datetime( $booking['return_datetime'] ) ) . '</strong></div>';
+		echo '<div><span>' . esc_html__( 'Totale', 'gest-web-rent' ) . '</span><strong>' . esc_html( GWR_Bookings::format_money( $booking['total_amount'], $booking['currency'] ) ) . '</strong></div>';
+		echo '<div><span>' . esc_html__( 'Pagamento', 'gest-web-rent' ) . '</span><strong>' . esc_html( $booking['payment_status'] ) . '</strong></div>';
+		echo '</div>';
+
+		self::portal_documents( $booking, $token );
+		self::portal_attachments( $booking, $token );
+		echo '</div></section>';
+		return ob_get_clean();
+	}
+
+	/**
+	 * Show the payment status block automatically on default Stripe redirect URLs.
+	 *
+	 * @param string $content Post content.
+	 * @return string
+	 */
+	public static function maybe_prepend_payment_status( $content ) {
+		static $rendered = false;
+		if ( $rendered || is_admin() || wp_doing_ajax() || ! in_the_loop() || ! is_main_query() || empty( $_GET['gwr_payment'] ) ) {
+			return $content;
+		}
+		$rendered = true;
+		return self::payment_status_shortcode() . $content;
 	}
 
 	public static function ajax_filter_catalog() {
@@ -163,9 +330,93 @@ class GWR_Frontend {
 				),
 				'booking' => array(
 					'privacyUrl' => esc_url_raw( (string) ( $settings['privacy_url'] ?? '' ) ),
+					'paymentMethods' => self::payment_methods_payload(),
 				),
 			)
 		);
+	}
+
+	private static function payment_methods_payload() {
+		$settings = GWR_Pricing_Service::get_settings();
+		$methods = array_filter( array_map( 'sanitize_key', explode( ',', (string) $settings['active_payment_methods'] ) ) );
+		if ( ! empty( $settings['stripe_enabled'] ) && ! in_array( 'stripe', $methods, true ) ) {
+			$methods[] = 'stripe';
+		}
+		if ( ! empty( $settings['bank_transfer_enabled'] ) && ! in_array( 'bank_transfer', $methods, true ) ) {
+			$methods[] = 'bank_transfer';
+		}
+		$labels = array(
+			'stripe'        => __( 'Carta o wallet con Stripe', 'gest-web-rent' ),
+			'bank_transfer' => __( 'Bonifico bancario', 'gest-web-rent' ),
+			'pickup'        => __( 'Pagamento al ritiro', 'gest-web-rent' ),
+			'request'       => __( 'Solo richiesta', 'gest-web-rent' ),
+		);
+		$output = array();
+		foreach ( $methods ?: array( 'request' ) as $method ) {
+			$output[] = array( 'id' => $method, 'label' => $labels[ $method ] ?? $method, 'default' => $method === ( $settings['default_payment_method'] ?? 'request' ) );
+		}
+		return $output;
+	}
+
+	private static function booking_by_code( $code ) {
+		global $wpdb;
+		$booking_id = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . GWR_Bookings::table() . ' WHERE booking_code=%s', sanitize_text_field( $code ) ) );
+		return $booking_id ? GWR_Bookings::get( $booking_id ) : null;
+	}
+
+	/**
+	 * Portal documents list.
+	 *
+	 * @param array  $booking Booking.
+	 * @param string $token Token.
+	 * @return void
+	 */
+	private static function portal_documents( $booking, $token ) {
+		if ( ! class_exists( 'GWR_Document_Service' ) ) {
+			return;
+		}
+		$types = GWR_Document_Service::document_types();
+		echo '<section class="gwr-booking-portal__section"><h3>' . esc_html__( 'Documenti disponibili', 'gest-web-rent' ) . '</h3><div class="gwr-booking-portal__list">';
+		$has_documents = false;
+		foreach ( $types as $type => $config ) {
+			if ( empty( $config['public'] ) ) {
+				continue;
+			}
+			$document = GWR_Document_Service::latest_for_booking( $booking['id'], $type );
+			if ( ! $document ) {
+				continue;
+			}
+			$has_documents = true;
+			$args = array( 'booking_code' => $booking['booking_code'], 'gwr_token' => $token );
+			echo '<article><div><strong>' . esc_html( $config['label'] ) . '</strong><span>' . esc_html( $document['document_number'] . ' v' . $document['version'] ) . '</span></div><a class="gwr-button-secondary" href="' . esc_url( GWR_Document_Service::document_url( $document, 'download', $args ) ) . '">' . esc_html__( 'Scarica', 'gest-web-rent' ) . '</a></article>';
+		}
+		if ( ! $has_documents ) {
+			echo '<p>' . esc_html__( 'Nessun documento disponibile al momento.', 'gest-web-rent' ) . '</p>';
+		}
+		echo '</div></section>';
+	}
+
+	/**
+	 * Portal customer-visible attachments.
+	 *
+	 * @param array  $booking Booking.
+	 * @param string $token Token.
+	 * @return void
+	 */
+	private static function portal_attachments( $booking, $token ) {
+		if ( ! class_exists( 'GWR_Attachment_Service' ) ) {
+			return;
+		}
+		$attachments = GWR_Attachment_Service::attachments_for_booking( $booking['id'], false );
+		if ( empty( $attachments ) ) {
+			return;
+		}
+		echo '<section class="gwr-booking-portal__section"><h3>' . esc_html__( 'Allegati', 'gest-web-rent' ) . '</h3><div class="gwr-booking-portal__list">';
+		foreach ( $attachments as $attachment ) {
+			$args = array( 'booking_code' => $booking['booking_code'], 'gwr_token' => $token );
+			echo '<article><div><strong>' . esc_html( $attachment['description'] ?: __( 'Allegato', 'gest-web-rent' ) ) . '</strong><span>' . esc_html( $attachment['mime_type'] ) . '</span></div><a class="gwr-button-secondary" href="' . esc_url( GWR_Attachment_Service::download_url( $attachment, $args ) ) . '">' . esc_html__( 'Scarica', 'gest-web-rent' ) . '</a></article>';
+		}
+		echo '</div></section>';
 	}
 
 	private static function filters_from_request( $source ) {

@@ -19,10 +19,17 @@ class GWR_Core {
 	public function boot() {
 		GWR_CPT::init();
 		GWR_Rental_Terms::maybe_initialize();
+		GWR_Pricing_Service::init();
 		GWR_Bookings::init();
+		GWR_Payment_Service::init();
+		GWR_Document_Service::init();
+		GWR_Attachment_Service::init();
 		GWR_Admin::init();
 		GWR_Rental_Terms_Admin::init();
 		GWR_Bookings_Admin::init();
+		GWR_Pricing_Admin::init();
+		GWR_Payments_Admin::init();
+		GWR_Documents_Admin::init();
 		GWR_Frontend::init();
 		GWR_Blocks::init();
 
@@ -50,10 +57,18 @@ class GWR_Core {
 	 */
 	public static function activate() {
 		GWR_CPT::create_tables();
+		GWR_Pricing_Service::create_tables();
 		GWR_Bookings::create_tables();
+		GWR_Payment_Service::create_tables();
+		GWR_Document_Service::create_tables();
+		GWR_Attachment_Service::create_tables();
 		GWR_CPT::maybe_migrate_cpt_vehicles();
 		update_option( 'gwr_db_version', GWR_CPT::DB_VERSION, false );
+		update_option( GWR_Pricing_Service::DB_OPTION, GWR_Pricing_Service::DB_VERSION, false );
 		update_option( GWR_Bookings::DB_OPTION, GWR_Bookings::DB_VERSION, false );
+		update_option( GWR_Payment_Service::DB_OPTION, GWR_Payment_Service::DB_VERSION, false );
+		update_option( GWR_Document_Service::DB_OPTION, GWR_Document_Service::DB_VERSION, false );
+		update_option( GWR_Attachment_Service::DB_OPTION, GWR_Attachment_Service::DB_VERSION, false );
 
 		if ( false === get_option( GWR_Admin::OPTION_NAME, false ) ) {
 			add_option( GWR_Admin::OPTION_NAME, GWR_Admin::default_settings(), '', false );
@@ -63,6 +78,12 @@ class GWR_Core {
 		}
 		if ( false === get_option( GWR_Rental_Terms::VEHICLE_OPTION, false ) ) {
 			add_option( GWR_Rental_Terms::VEHICLE_OPTION, array(), '', false );
+		}
+		if ( false === get_option( GWR_Pricing_Service::OPTION_NAME, false ) ) {
+			add_option( GWR_Pricing_Service::OPTION_NAME, GWR_Pricing_Service::default_settings(), '', false );
+		}
+		if ( false === get_option( GWR_Document_Service::OPTION_NAME, false ) ) {
+			add_option( GWR_Document_Service::OPTION_NAME, GWR_Document_Service::default_settings(), '', false );
 		}
 
 		flush_rewrite_rules();
@@ -75,6 +96,7 @@ class GWR_Core {
 	 */
 	public static function deactivate() {
 		wp_clear_scheduled_hook( 'gwr_expire_pending_bookings' );
+		wp_clear_scheduled_hook( 'gwr_reconcile_payments' );
 		flush_rewrite_rules();
 	}
 }
