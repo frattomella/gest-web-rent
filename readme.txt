@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.5
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,12 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 1.2.0 =
+* Nuova barra di ricerca professionale con localita, date e orari.
+* Aggiunti riepilogo ricerca, validazione inline e stato loading accessibile.
+* Filtri secondari responsive con contatore, applicazione esplicita e reset selettivo.
+* Migliorati stati vuoto ed errore tecnico del catalogo.
 
 = 1.1.5 =
 * Date frontend nel formato italiano GG-MM-AAAA con valori ISO interni.

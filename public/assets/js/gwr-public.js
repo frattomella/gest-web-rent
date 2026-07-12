@@ -62,44 +62,131 @@
     errorNode.hidden = true;
   }
 
-  function syncDateFields(form, errorNode) {
-    var cfg = catalogConfig();
-    var valid = true;
-    qsa(form, '[data-gwr-date-display]').some(function (input) {
-      var target = document.getElementById(input.getAttribute('data-gwr-date-target'));
-      var value = input.value.trim();
-      if (!target) return false;
-      if (!value) {
-        target.value = '';
-        return false;
-      }
-      var isoValue = italianToIsoDate(value);
-      if (!isoValue) {
-        showCatalogError(errorNode, cfg.i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
-        input.setAttribute('aria-invalid', 'true');
-        input.focus();
-        valid = false;
-        return true;
-      }
-      input.value = isoToItalianDate(isoValue);
-      input.removeAttribute('aria-invalid');
-      target.value = isoValue;
-      return false;
-    });
-    return valid;
+  function maskItalianDateInput(value) {
+    var digits = String(value || '').replace(/\D/g, '').slice(0, 8);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return digits.slice(0, 2) + '-' + digits.slice(2);
+    return digits.slice(0, 2) + '-' + digits.slice(2, 4) + '-' + digits.slice(4);
   }
 
-  function validDateRange(data, errorNode) {
+  function fieldErrorNode(input) {
+    return input ? document.getElementById(input.getAttribute('data-gwr-error-target')) : null;
+  }
+
+  function showFieldError(input, message) {
+    var node = fieldErrorNode(input);
+    if (!input) return;
+    input.setAttribute('aria-invalid', 'true');
+    if (node) {
+      node.textContent = message;
+      node.hidden = false;
+    }
+  }
+
+  function clearFieldError(input) {
+    var node = fieldErrorNode(input);
+    if (!input) return;
+    input.removeAttribute('aria-invalid');
+    if (node) {
+      node.textContent = '';
+      node.hidden = true;
+    }
+  }
+
+  function clearFormErrors(form, formError) {
+    qsa(form, '[aria-invalid="true"]').forEach(clearFieldError);
+    if (formError) {
+      formError.textContent = '';
+      formError.hidden = true;
+    }
+  }
+
+  function syncDateField(input) {
+    var target = input ? document.getElementById(input.getAttribute('data-gwr-date-target')) : null;
+    var value = input ? input.value.trim() : '';
+    if (!target) return '';
+    if (!value) {
+      target.value = '';
+      return '';
+    }
+    var isoValue = italianToIsoDate(value);
+    if (!isoValue) {
+      target.value = '';
+      return '';
+    }
+    input.value = isoToItalianDate(isoValue);
+    target.value = isoValue;
+    return isoValue;
+  }
+
+  function isValidTime(value) {
+    return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(value || ''));
+  }
+
+  function dateTimeTimestamp(dateValue, timeValue) {
+    var parts = parseIsoDate(dateValue);
+    if (!parts || !isValidTime(timeValue)) return NaN;
+    var timeParts = timeValue.split(':');
+    return Date.UTC(parts.year, parts.month - 1, parts.day, Number(timeParts[0]), Number(timeParts[1]));
+  }
+
+  function todayTimestamp() {
+    var today = new Date();
+    return Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  }
+
+  function validateSearchForm(form, formError) {
     var cfg = catalogConfig();
-    var startTime = data.start_date ? isoDateTimestamp(data.start_date) : NaN;
-    var endTime = data.end_date ? isoDateTimestamp(data.end_date) : NaN;
-    if (data.start_date && data.end_date && endTime < startTime) {
-      var message = cfg.i18n.dateError || 'La data fine %2$s non puo precedere la data inizio %1$s.';
-      message = message.replace('%1$s', isoToItalianDate(data.start_date)).replace('%2$s', isoToItalianDate(data.end_date));
-      showCatalogError(errorNode, message);
+    var i18n = cfg.i18n || {};
+    var firstInvalid = null;
+    var pickupDate = qs(form, '[data-gwr-date-role="pickup"]');
+    var returnDate = qs(form, '[data-gwr-date-role="return"]');
+    var pickupTime = qs(form, '[data-gwr-time-role="pickup"]');
+    var returnTime = qs(form, '[data-gwr-time-role="return"]');
+    var pickupLocation = qs(form, '[data-gwr-pickup-location]');
+    var returnLocation = qs(form, '[data-gwr-return-location-field]');
+    var differentReturn = qs(form, '[data-gwr-different-return]');
+    clearFormErrors(form, formError);
+
+    function invalidate(input, message) {
+      showFieldError(input, message);
+      if (!firstInvalid) firstInvalid = input;
+    }
+
+    if (pickupLocation && pickupLocation.getAttribute('data-gwr-required') === '1' && !pickupLocation.value) {
+      invalidate(pickupLocation, i18n.pickupLocation || 'Seleziona la localita di ritiro.');
+    }
+    if (differentReturn && differentReturn.checked && returnLocation && !returnLocation.disabled && !returnLocation.value) {
+      invalidate(returnLocation, i18n.returnLocation || 'Seleziona la localita di riconsegna.');
+    }
+
+    var pickupIso = syncDateField(pickupDate);
+    var returnIso = syncDateField(returnDate);
+    if (!pickupDate.value.trim()) invalidate(pickupDate, i18n.pickupDateRequired || 'Inserisci la data di ritiro.');
+    else if (!pickupIso) invalidate(pickupDate, i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
+    if (!returnDate.value.trim()) invalidate(returnDate, i18n.returnDateRequired || 'Inserisci la data di riconsegna.');
+    else if (!returnIso) invalidate(returnDate, i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
+
+    if (pickupIso && isoDateTimestamp(pickupIso) < todayTimestamp()) {
+      invalidate(pickupDate, i18n.pastDate || 'La data di ritiro non puo essere precedente a oggi.');
+    }
+    if (!pickupTime || !isValidTime(pickupTime.value)) invalidate(pickupTime, i18n.timeRequired || 'Inserisci un orario valido nel formato HH:MM.');
+    if (!returnTime || !isValidTime(returnTime.value)) invalidate(returnTime, i18n.timeRequired || 'Inserisci un orario valido nel formato HH:MM.');
+
+    var pickupTimestamp = dateTimeTimestamp(pickupIso, pickupTime ? pickupTime.value : '');
+    var returnTimestamp = dateTimeTimestamp(returnIso, returnTime ? returnTime.value : '');
+    if (!Number.isNaN(pickupTimestamp) && !Number.isNaN(returnTimestamp) && returnTimestamp <= pickupTimestamp) {
+      invalidate(returnDate, i18n.returnAfterPickup || 'La riconsegna deve essere successiva al ritiro.');
+    }
+
+    if (firstInvalid) {
+      if (formError) {
+        formError.textContent = i18n.formError || 'Controlla i campi evidenziati.';
+        formError.hidden = false;
+      }
+      firstInvalid.focus();
       return false;
     }
-    clearCatalogError(errorNode);
     return true;
   }
 
@@ -376,16 +463,58 @@
     });
   }
 
+  function selectedOptionLabel(select) {
+    if (!select || select.selectedIndex < 0) return '';
+    return select.options[select.selectedIndex].textContent.trim();
+  }
+
+  function activeSecondaryFilterCount(form) {
+    return qsa(form, '[data-gwr-secondary-filter]').filter(function (field) {
+      if (field.type === 'checkbox' || field.type === 'radio') return field.checked;
+      if (field.type === 'number') return String(field.value || '').trim() !== '' && Number(field.value) > 0;
+      return String(field.value || '').trim() !== '';
+    }).length;
+  }
+
+  function rentalDurationLabel(data) {
+    var start = dateTimeTimestamp(data.start_date, data.pickup_time);
+    var end = dateTimeTimestamp(data.end_date, data.return_time);
+    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return '';
+    var minutes = Math.floor((end - start) / 60000);
+    var days = Math.floor(minutes / 1440);
+    var hours = Math.floor((minutes % 1440) / 60);
+    var remainingMinutes = minutes % 60;
+    var parts = [];
+    if (days) parts.push(days + (days === 1 ? ' giorno' : ' giorni'));
+    if (hours) parts.push(hours + (hours === 1 ? ' ora' : ' ore'));
+    if (remainingMinutes) parts.push(remainingMinutes + ' min');
+    return 'Durata: ' + (parts.join(' e ') || '0 min');
+  }
+
+  function requestFormSubmit(form) {
+    if (typeof form.requestSubmit === 'function') form.requestSubmit();
+    else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  }
+
   function initCatalog(catalog) {
     var form = qs(catalog, '[data-gwr-filter-form]');
     var results = qs(catalog, '[data-gwr-results]');
-    var count = qs(catalog, '[data-gwr-count]');
-    var summary = qs(catalog, '[data-gwr-query-summary]');
+    var resultsShell = results ? results.parentNode : null;
+    var counts = qsa(catalog, '[data-gwr-count]');
+    var initialResults = qs(catalog, '[data-gwr-initial-results]');
+    var searchSummary = qs(catalog, '[data-gwr-search-summary]');
+    var summaryLocation = qs(catalog, '[data-gwr-summary-location]');
+    var summaryPeriod = qs(catalog, '[data-gwr-summary-period]');
+    var summaryDuration = qs(catalog, '[data-gwr-summary-duration]');
     var errorNode = qs(catalog, '[data-gwr-error]');
+    var formError = qs(form, '[data-gwr-form-error]');
     var submitButton = qs(form, '[data-gwr-search-submit]');
     var submitLabel = qs(form, '[data-gwr-search-label]');
     var filterToggle = qs(form, '[data-gwr-filter-toggle]');
     var advancedFilters = qs(form, '[data-gwr-filter-advanced]');
+    var filterCount = qs(form, '[data-gwr-filter-count]');
+    var differentReturn = qs(form, '[data-gwr-different-return]');
+    var returnLocationPanel = qs(form, '[data-gwr-return-location]');
     var requestInProgress = false;
     if (!form || !results) return;
 
@@ -396,55 +525,167 @@
       advancedFilters.classList.toggle('is-open', open);
     }
 
+    function isDesktopFilters() {
+      return window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
+    }
+
+    function updateReturnLocation() {
+      if (!differentReturn || !returnLocationPanel) return;
+      var open = differentReturn.checked;
+      differentReturn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      returnLocationPanel.hidden = !open;
+      var returnField = qs(returnLocationPanel, '[data-gwr-return-location-field]');
+      if (returnField) returnField.setAttribute('aria-required', open && !returnField.disabled ? 'true' : 'false');
+      if (!open) clearFieldError(qs(returnLocationPanel, '[data-gwr-return-location-field]'));
+    }
+
+    function updateFilterCount() {
+      if (!filterCount) return;
+      var total = activeSecondaryFilterCount(form);
+      filterCount.textContent = '(' + total + ')';
+      filterCount.hidden = total === 0;
+    }
+
+    function updateResultCount(total) {
+      var cfg = catalogConfig();
+      var label = total === 1 ? (cfg.i18n.countOne || '1 veicolo disponibile') : (cfg.i18n.countMany || '%d veicoli disponibili').replace('%d', total);
+      counts.forEach(function (node) { node.textContent = label; });
+    }
+
+    function updateSearchSummary(data) {
+      var pickupSelect = qs(form, '[data-gwr-pickup-location]');
+      var returnSelect = qs(form, '[data-gwr-return-location-field]');
+      var pickupLabel = selectedOptionLabel(pickupSelect) || 'Localita da definire';
+      var returnLabel = data.different_return === '1' ? (selectedOptionLabel(returnSelect) || pickupLabel) : pickupLabel;
+      if (summaryLocation) summaryLocation.textContent = pickupLabel === returnLabel ? pickupLabel : pickupLabel + ' \u2192 ' + returnLabel;
+      if (summaryPeriod) summaryPeriod.textContent = isoToItalianDate(data.start_date) + ', ' + data.pickup_time + ' \u2192 ' + isoToItalianDate(data.end_date) + ', ' + data.return_time;
+      if (summaryDuration) summaryDuration.textContent = rentalDurationLabel(data);
+      if (initialResults) initialResults.hidden = true;
+      if (searchSummary) searchSummary.hidden = false;
+    }
+
+    function focusSearch() {
+      var target = qs(form, '[data-gwr-pickup-location]');
+      if (!target || target.disabled) target = qs(form, '[data-gwr-date-role="pickup"]');
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.setTimeout(function () { if (target) target.focus(); }, 250);
+    }
+
     function setLoading(loading) {
       var cfg = catalogConfig();
       requestInProgress = loading;
       catalog.classList.toggle('is-loading', loading);
       form.setAttribute('aria-busy', loading ? 'true' : 'false');
+      if (resultsShell) resultsShell.setAttribute('aria-busy', loading ? 'true' : 'false');
       if (submitButton) submitButton.disabled = loading;
       if (submitLabel) submitLabel.textContent = loading ? (cfg.i18n.searchingLabel || 'Ricerca in corso...') : (cfg.i18n.searchLabel || 'Cerca veicoli');
+    }
+
+    function renderTechnicalError() {
+      var cfg = catalogConfig();
+      results.innerHTML = '<div class="gwr-technical-state" role="alert"><span class="gwr-technical-state__icon" aria-hidden="true">!</span><h3>Ricerca temporaneamente non disponibile</h3><p>' + escapeHtml(cfg.i18n.technicalError || 'Non e stato possibile completare la ricerca. Riprova tra qualche istante.') + '</p><div class="gwr-technical-state__actions"><button type="button" class="gwr-button" data-gwr-retry-search>Riprova</button><button type="button" class="gwr-button-secondary" data-gwr-edit-search>Modifica ricerca</button></div></div>';
     }
 
     function update() {
       var cfg = catalogConfig();
       if (!cfg.ajaxUrl || !cfg.nonce || requestInProgress) return;
-      if (!syncDateFields(form, errorNode)) return;
+      if (!validateSearchForm(form, formError)) return;
       var data = formDataObject(form);
       var body = new FormData();
-      if (!validDateRange(data, errorNode)) return;
-      body.append('action', 'gwr_filter_catalog'); body.append('nonce', cfg.nonce);
+      clearCatalogError(errorNode);
+      if (data.different_return !== '1') delete data.return_location;
+      data.pickup_date = data.start_date;
+      data.return_date = data.end_date;
+      body.append('action', 'gwr_filter_catalog');
+      body.append('nonce', cfg.nonce);
       Object.keys(data).forEach(function (key) { body.append(key, data[key]); });
       setLoading(true);
-      return window.fetch(cfg.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body }).then(function (response) { return response.json(); }).then(function (json) {
+      return window.fetch(cfg.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body }).then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      }).then(function (json) {
         if (!json || !json.success) throw new Error('AJAX error');
         results.innerHTML = json.data.html;
-        if (json.data.error && errorNode) { errorNode.textContent = json.data.error; errorNode.hidden = false; } else if (errorNode) { errorNode.hidden = true; }
-        if (count) count.textContent = json.data.count === 1 ? (cfg.i18n.countOne || '1 veicolo disponibile') : (cfg.i18n.countMany || '%d veicoli disponibili').replace('%d', json.data.count);
-        if (summary) summary.textContent = json.data.summary || selectedDatesLabel(data);
-      }).catch(function (error) { console.error('Gest Web Rent filter error:', error); showCatalogError(errorNode, 'Errore durante la ricerca dei veicoli. Riprova.'); }).finally(function () { setLoading(false); });
+        if (json.data.error) showCatalogError(errorNode, json.data.error); else clearCatalogError(errorNode);
+        updateResultCount(Number(json.data.count) || 0);
+        updateSearchSummary(data);
+      }).catch(function (error) {
+        console.error('Gest Web Rent filter error:', error);
+        clearCatalogError(errorNode);
+        renderTechnicalError();
+      }).finally(function () { setLoading(false); });
     }
 
-    setAdvancedFilters(window.matchMedia && window.matchMedia('(min-width: 769px)').matches);
+    setAdvancedFilters(isDesktopFilters());
+    updateReturnLocation();
+    updateFilterCount();
     if (filterToggle) filterToggle.addEventListener('click', function () { setAdvancedFilters(filterToggle.getAttribute('aria-expanded') !== 'true'); });
+    if (differentReturn) differentReturn.addEventListener('change', updateReturnLocation);
     qsa(form, '[data-gwr-date-display]').forEach(function (input) {
+      input.addEventListener('input', function () {
+        input.value = maskItalianDateInput(input.value);
+        clearFieldError(input);
+      });
       input.addEventListener('blur', function () {
-        var isoValue = italianToIsoDate(input.value);
-        var target = document.getElementById(input.getAttribute('data-gwr-date-target'));
-        if (isoValue && target) {
-          input.value = isoToItalianDate(isoValue);
-          input.removeAttribute('aria-invalid');
-          target.value = isoValue;
+        var cfg = catalogConfig();
+        var role = input.getAttribute('data-gwr-date-role');
+        if (!input.value.trim()) {
+          showFieldError(input, role === 'pickup' ? (cfg.i18n.pickupDateRequired || 'Inserisci la data di ritiro.') : (cfg.i18n.returnDateRequired || 'Inserisci la data di riconsegna.'));
+        } else if (!syncDateField(input)) {
+          showFieldError(input, cfg.i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
+        } else {
+          clearFieldError(input);
         }
       });
     });
+    qsa(form, '[data-gwr-time-role], [data-gwr-location-field]').forEach(function (input) {
+      input.addEventListener('change', function () { clearFieldError(input); });
+    });
+    qsa(form, '[data-gwr-secondary-filter]').forEach(function (field) {
+      field.addEventListener('input', updateFilterCount);
+      field.addEventListener('change', updateFilterCount);
+    });
     form.addEventListener('submit', function (event) { event.preventDefault(); update(); });
     catalog.addEventListener('click', function (event) {
-      if (!event.target.closest('[data-gwr-reset-filters]')) return;
-      qsa(form, 'input').forEach(function (input) { input.value = ''; input.removeAttribute('aria-invalid'); });
-      qsa(form, 'select').forEach(function (select) { select.selectedIndex = 0; });
-      clearCatalogError(errorNode);
-      if (summary) summary.textContent = 'Seleziona le date e premi Cerca veicoli.';
+      if (event.target.closest('[data-gwr-reset-filters]')) {
+        qsa(form, '[data-gwr-secondary-filter]').forEach(function (field) {
+          if (field.type === 'checkbox' || field.type === 'radio') field.checked = false;
+          else field.value = '';
+        });
+        updateFilterCount();
+        return;
+      }
+      if (event.target.closest('[data-gwr-apply-filters]')) {
+        if (!isDesktopFilters()) {
+          setAdvancedFilters(false);
+          if (filterToggle) filterToggle.focus();
+        }
+        requestFormSubmit(form);
+        return;
+      }
+      if (event.target.closest('[data-gwr-close-filters]')) {
+        setAdvancedFilters(false);
+        if (filterToggle) filterToggle.focus();
+        return;
+      }
+      if (event.target.closest('[data-gwr-edit-search]')) {
+        focusSearch();
+        return;
+      }
+      if (event.target.closest('[data-gwr-retry-search]')) requestFormSubmit(form);
     });
+    form.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && advancedFilters && !advancedFilters.hidden && !isDesktopFilters()) {
+        setAdvancedFilters(false);
+        if (filterToggle) filterToggle.focus();
+      }
+    });
+    if (window.matchMedia) {
+      var filtersMedia = window.matchMedia('(min-width: 1024px)');
+      var handleFilterBreakpoint = function () { setAdvancedFilters(filtersMedia.matches); };
+      if (typeof filtersMedia.addEventListener === 'function') filtersMedia.addEventListener('change', handleFilterBreakpoint);
+      else if (typeof filtersMedia.addListener === 'function') filtersMedia.addListener(handleFilterBreakpoint);
+    }
   }
 
   document.addEventListener('click', function (event) {

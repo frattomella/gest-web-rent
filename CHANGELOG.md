@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- Introdotto un design system isolato per il catalogo pubblico.
+- Ridisegnata la barra di ricerca con localita di ritiro e riconsegna, date italiane e orari.
+- Aggiunte validazione inline, gestione del periodo e riepilogo della ricerca.
+- Resi espliciti submit e applicazione filtri, senza richieste AJAX durante la compilazione.
+- Aggiunti contatore filtri, reset selettivo e pannello responsive accessibile.
+- Distinti gli stati iniziale, loading, nessun risultato ed errore tecnico.
+
 ## 1.1.5
 
 - Date frontend nel formato italiano `GG-MM-AAAA` con valori ISO interni.
