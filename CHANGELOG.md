@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.0
+
+- Aggiunto flusso prenotazione fullscreen a quattro step con cliente, conducente, documenti e consensi.
+- Create le tabelle `gwr_bookings`, `gwr_booking_items` e `gwr_booking_logs` con migrazione idempotente.
+- Centralizzati ricalcolo server-side, requisiti conducente, snapshot, codice pratica e transizioni.
+- Aggiunti lock MySQL per veicolo, transazioni e blocchi disponibilita collegati alla prenotazione.
+- Aggiunti honeypot, tempo minimo, rate limiting, nonce e blocco doppio invio.
+- Aggiunte email cliente/amministratore e comunicazioni cliente sui cambi di stato.
+- Aggiunta amministrazione con elenco paginato, filtri, dettaglio, modifica controllata e stampa.
+- Aggiunta scadenza configurabile delle richieste in attesa e rilascio automatico del veicolo.
+
 ## 1.5.0
 
 - Aggiunta pagina amministrativa `Condizioni di noleggio` con navigazione per sezioni.

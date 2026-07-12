@@ -19,8 +19,10 @@ class GWR_Core {
 	public function boot() {
 		GWR_CPT::init();
 		GWR_Rental_Terms::maybe_initialize();
+		GWR_Bookings::init();
 		GWR_Admin::init();
 		GWR_Rental_Terms_Admin::init();
+		GWR_Bookings_Admin::init();
 		GWR_Frontend::init();
 		GWR_Blocks::init();
 
@@ -48,8 +50,10 @@ class GWR_Core {
 	 */
 	public static function activate() {
 		GWR_CPT::create_tables();
+		GWR_Bookings::create_tables();
 		GWR_CPT::maybe_migrate_cpt_vehicles();
 		update_option( 'gwr_db_version', GWR_CPT::DB_VERSION, false );
+		update_option( GWR_Bookings::DB_OPTION, GWR_Bookings::DB_VERSION, false );
 
 		if ( false === get_option( GWR_Admin::OPTION_NAME, false ) ) {
 			add_option( GWR_Admin::OPTION_NAME, GWR_Admin::default_settings(), '', false );
@@ -70,6 +74,7 @@ class GWR_Core {
 	 * @return void
 	 */
 	public static function deactivate() {
+		wp_clear_scheduled_hook( 'gwr_expire_pending_bookings' );
 		flush_rewrite_rules();
 	}
 }

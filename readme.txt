@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,6 +20,9 @@ Funzionalita principali:
 * Gestione veicoli tramite form custom.
 * Condizioni di noleggio globali con override per singolo veicolo.
 * Coperture, franchigie, deposito, requisiti, documenti, politiche, extra e FAQ configurabili.
+* Prenotazione a quattro step con cliente, conducente, consensi e conferma.
+* Prezzo e disponibilita ricalcolati dal server con protezione dai conflitti.
+* Gestione amministrativa di stato, cronologia, consegna, riconsegna e stampa.
 * Foto veicolo tramite Media Library.
 * Indisponibilita per date in tabella custom.
 * Catalogo frontend responsive con griglia a 2 colonne desktop.
@@ -61,6 +64,14 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 1.6.0 =
+* Aggiunto flusso completo di prenotazione a quattro step nel configuratore fullscreen.
+* Aggiunte tabelle prenotazioni, righe e cronologia con migrazione idempotente.
+* Aggiunti ricalcolo prezzo server-side, snapshot commerciale e blocco disponibilita atomico.
+* Aggiunti codice pratica, consensi, antispam, email cliente/admin e conferma frontend.
+* Aggiunta area admin con filtri, paginazione, dettaglio, transizioni, modifica e stampa.
+* Aggiunta scadenza configurabile delle richieste in attesa tramite WP-Cron.
 
 = 1.5.0 =
 * Aggiunta area amministrativa Condizioni di noleggio con navigazione a sezioni.

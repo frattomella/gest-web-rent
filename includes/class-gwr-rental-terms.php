@@ -253,7 +253,7 @@ class GWR_Rental_Terms {
 		return array(
 			'general' => array(
 				'title' => 'text', 'intro' => 'textarea', 'rental_name' => 'text', 'currency' => 'currency',
-				'taxes' => 'taxes', 'terms_url' => 'url', 'general_note' => 'textarea', 'updated_at' => 'date',
+				'taxes' => 'taxes', 'tax_rate' => 'percent', 'terms_url' => 'url', 'general_note' => 'textarea', 'updated_at' => 'date',
 			),
 			'excesses' => array(
 				'damage_amount' => 'decimal', 'damage_percent' => 'percent', 'theft_amount' => 'decimal', 'theft_percent' => 'percent',
@@ -267,7 +267,7 @@ class GWR_Rental_Terms {
 			),
 			'driver_requirements' => array(
 				'min_age' => 'integer', 'max_age' => 'integer', 'min_license_years' => 'integer', 'international_license' => 'bool',
-				'eu_license' => 'bool', 'young_driver_surcharge' => 'bool', 'senior_driver_surcharge' => 'bool', 'surcharge_cost' => 'decimal',
+				'eu_license' => 'bool', 'young_driver_surcharge' => 'bool', 'young_driver_max_age' => 'integer', 'senior_driver_surcharge' => 'bool', 'senior_driver_min_age' => 'integer', 'surcharge_cost' => 'decimal',
 				'surcharge_mode' => 'price_mode', 'main_driver_required' => 'bool', 'additional_drivers' => 'bool', 'max_drivers' => 'integer',
 				'description' => 'textarea', 'notes' => 'textarea',
 			),
@@ -287,7 +287,7 @@ class GWR_Rental_Terms {
 			'cancellation_policy' => array(
 				'allowed' => 'bool', 'free' => 'bool', 'hours_limit' => 'integer', 'days_limit' => 'integer', 'fixed_penalty' => 'decimal',
 				'percent_penalty' => 'percent', 'no_show' => 'textarea', 'date_changes' => 'bool', 'vehicle_changes' => 'bool',
-				'refund' => 'bool', 'refund_timing' => 'text', 'description' => 'textarea', 'notes' => 'textarea',
+				'refund' => 'bool', 'refund_timing' => 'text', 'policy_url' => 'url', 'description' => 'textarea', 'notes' => 'textarea',
 			),
 			'pickup_return_policy' => array(
 				'pickup_mode' => 'text', 'return_mode' => 'text', 'location_name' => 'text', 'address' => 'text', 'instructions' => 'textarea',
@@ -461,6 +461,8 @@ class GWR_Rental_Terms {
 			$driver['surcharge_cost'] = null;
 			$driver['surcharge_mode'] = '';
 		}
+		if ( ! $driver['young_driver_surcharge'] ) { $driver['young_driver_max_age'] = null; }
+		if ( ! $driver['senior_driver_surcharge'] ) { $driver['senior_driver_min_age'] = null; }
 		if ( 'unlimited' === $terms['mileage_policy']['type'] ) {
 			$terms['mileage_policy']['included_km'] = null;
 			$terms['mileage_policy']['extra_km_cost'] = null;

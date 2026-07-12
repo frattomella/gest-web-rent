@@ -19,6 +19,31 @@ class GWR_Frontend {
 		add_action( 'wp_ajax_nopriv_gwr_filter_catalog', array( __CLASS__, 'ajax_filter_catalog' ) );
 		add_action( 'wp_ajax_gwr_vehicle_detail', array( __CLASS__, 'ajax_vehicle_detail' ) );
 		add_action( 'wp_ajax_nopriv_gwr_vehicle_detail', array( __CLASS__, 'ajax_vehicle_detail' ) );
+		add_action( 'wp_ajax_gwr_create_booking', array( __CLASS__, 'ajax_create_booking' ) );
+		add_action( 'wp_ajax_nopriv_gwr_create_booking', array( __CLASS__, 'ajax_create_booking' ) );
+	}
+
+	/** Validate and create a booking request. */
+	public static function ajax_create_booking() {
+		check_ajax_referer( 'gwr_catalog_nonce', 'nonce' );
+		$raw = isset( $_POST['booking'] ) ? json_decode( wp_unslash( $_POST['booking'] ), true ) : array();
+		$raw = is_array( $raw ) ? $raw : array();
+		$antispam = GWR_Bookings::check_antispam( $raw );
+		if ( is_wp_error( $antispam ) ) {
+			wp_send_json_error( array( 'message' => $antispam->get_error_message(), 'code' => $antispam->get_error_code() ), 429 );
+		}
+		$result = GWR_Bookings::create( $raw );
+		if ( is_wp_error( $result ) ) {
+			$data = $result->get_error_data();
+			wp_send_json_error( array( 'message' => $result->get_error_message(), 'code' => $result->get_error_code(), 'field' => is_array( $data ) ? ( $data['field'] ?? '' ) : '' ), 400 );
+		}
+		wp_send_json_success( array(
+			'booking_code' => $result['booking_code'],
+			'status' => GWR_Bookings::statuses()[ $result['status'] ] ?? $result['status'],
+			'vehicle' => $result['vehicle_title'],
+			'period' => GWR_Bookings::format_datetime( $result['pickup_datetime'] ) . ' - ' . GWR_Bookings::format_datetime( $result['return_datetime'] ),
+			'total' => GWR_Bookings::format_money( $result['total_amount'], $result['currency'] ),
+		) );
 	}
 
 	/** Load the extended modal payload only when requested. */
@@ -135,6 +160,9 @@ class GWR_Frontend {
 					'emailBody'        => sanitize_textarea_field( (string) $settings['email_body'] ),
 					'privacyNote'      => sanitize_textarea_field( (string) $settings['privacy_note'] ),
 					'siteUrl'          => home_url( '/' ),
+				),
+				'booking' => array(
+					'privacyUrl' => esc_url_raw( (string) ( $settings['privacy_url'] ?? '' ) ),
 				),
 			)
 		);

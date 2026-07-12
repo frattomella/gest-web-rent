@@ -8,6 +8,7 @@
   var galleryTouchStartX = null;
   var galleryTouchModal = null;
   var lastContactActivation = 0;
+  var activeBookingContext = null;
 
   function validDateParts(year, month, day) {
     var date = new Date(Date.UTC(year, month - 1, day));
@@ -330,6 +331,46 @@
     return '<div class="gwr-booking-point"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(location || 'Localita da definire') + '</strong><small>' + escapeHtml(dateLabel + ' \u00b7 ' + timeLabel) + '</small></div>';
   }
 
+  function bookingInput(name, label, type, required, attributes) {
+    var id = 'gwr-booking-' + name.replace(/_/g, '-');
+    return '<label class="gwr-booking-field" for="' + id + '"><span>' + escapeHtml(label) + (required ? ' <b aria-hidden="true">*</b>' : '') + '</span><input id="' + id + '" type="' + escapeHtml(type || 'text') + '" name="' + escapeHtml(name) + '"' + (required ? ' required aria-required="true"' : '') + (attributes || '') + ' /><small data-gwr-booking-field-error></small></label>';
+  }
+
+  function bookingFlowMarkup(vehicle, dates, generalTerms, documents, cancellationPolicy) {
+    var termsUrl = safeHttpUrl(generalTerms.terms_url || '');
+    var privacyUrl = safeHttpUrl((catalogConfig().booking || {}).privacyUrl || '');
+    var cancellationUrl = safeHttpUrl((cancellationPolicy || {}).policy_url || '');
+    var requiredDocuments = (documents || []).filter(function (row) { return row.required; });
+    var documentMarkup = requiredDocuments.map(function (row) {
+      return '<label class="gwr-booking-consent"><input type="checkbox" name="document_confirmation" value="' + escapeHtml(row.id) + '" required /><span><strong>' + escapeHtml(row.name) + '</strong>' + (row.description ? '<small>' + escapeHtml(row.description) + '</small>' : '') + '</span></label>';
+    }).join('');
+    return [
+      '<form class="gwr-booking-flow" data-gwr-booking-flow hidden novalidate>',
+      '<ol class="gwr-booking-stepper" aria-label="Procedura di prenotazione">',
+      '<li data-gwr-step-indicator="1"><span>1</span><strong>Veicolo</strong></li><li data-gwr-step-indicator="2"><span>2</span><strong>Dati</strong></li><li data-gwr-step-indicator="3"><span>3</span><strong>Riepilogo</strong></li><li data-gwr-step-indicator="4"><span>4</span><strong>Conferma</strong></li>',
+      '</ol>',
+      '<div class="gwr-booking-errors" role="alert" tabindex="-1" data-gwr-booking-errors hidden></div>',
+      '<section class="gwr-booking-step" data-gwr-booking-step="2"><header><span>Dati intestatario</span><h3>Chi effettua la prenotazione?</h3><p>I dati servono esclusivamente per gestire la richiesta e verificare i requisiti di noleggio.</p></header>',
+      '<fieldset><legend>Cliente</legend><div class="gwr-booking-grid">',
+      '<label class="gwr-booking-field"><span>Tipo cliente</span><select name="customer_type" data-gwr-customer-type><option value="private">Privato</option><option value="company">Azienda</option></select></label>',
+      bookingInput('customer_first_name','Nome','text',true,' autocomplete="given-name"'), bookingInput('customer_last_name','Cognome','text',true,' autocomplete="family-name"'), bookingInput('customer_email','Email','email',true,' autocomplete="email"'), bookingInput('customer_phone','Telefono','tel',true,' autocomplete="tel"'),
+      bookingInput('customer_tax_code','Codice fiscale','text',false,' autocomplete="off"'), bookingInput('customer_birth_date','Data di nascita','date',true,''), bookingInput('customer_birth_place','Luogo di nascita','text',false,''), bookingInput('customer_nationality','Nazionalita','text',false,''), bookingInput('customer_address','Indirizzo','text',false,' autocomplete="street-address"'), bookingInput('customer_postal_code','CAP','text',false,' autocomplete="postal-code"'), bookingInput('customer_city','Citta','text',false,' autocomplete="address-level2"'), bookingInput('customer_province','Provincia','text',false,' autocomplete="address-level1"'), bookingInput('customer_country','Paese','text',false,' autocomplete="country-name"'),
+      '</div><div class="gwr-booking-company" data-gwr-company-fields hidden><h4>Dati azienda</h4><div class="gwr-booking-grid">', bookingInput('company_name','Ragione sociale','text',false,''), bookingInput('vat_number','Partita IVA','text',false,''), bookingInput('company_tax_code','Codice fiscale azienda','text',false,''), bookingInput('pec','PEC','email',false,''), bookingInput('recipient_code','Codice destinatario','text',false,''), bookingInput('registered_office','Sede legale','text',false,''), bookingInput('contact_person','Referente','text',false,''), '</div></div>',
+      '<label class="gwr-booking-field gwr-booking-field--wide"><span>Note cliente</span><textarea name="customer_notes" rows="3"></textarea></label></fieldset>',
+      '<fieldset><legend>Conducente</legend><label class="gwr-booking-consent"><input type="checkbox" name="driver_same" value="1" checked data-gwr-driver-same /><span>Il conducente coincide con il cliente</span></label><div class="gwr-booking-driver-identity" data-gwr-driver-identity hidden><div class="gwr-booking-grid">', bookingInput('driver_first_name','Nome conducente','text',false,''), bookingInput('driver_last_name','Cognome conducente','text',false,''), bookingInput('driver_birth_date','Data di nascita','date',false,''), bookingInput('driver_birth_place','Luogo di nascita','text',false,''), bookingInput('driver_nationality','Nazionalita','text',false,''), bookingInput('driver_tax_code','Codice fiscale','text',false,''), bookingInput('driver_email','Email','email',false,''), bookingInput('driver_phone','Telefono','tel',false,''), bookingInput('driver_address','Indirizzo','text',false,''), '</div></div><div class="gwr-booking-grid gwr-booking-license">',
+      bookingInput('license_type','Tipo patente','text',true,' value="B"'), bookingInput('license_number','Numero patente','text',true,''), bookingInput('license_country','Paese rilascio','text',true,''), bookingInput('license_issue_date','Data rilascio','date',true,''), bookingInput('license_expiry_date','Data scadenza','date',true,''),
+      '<label class="gwr-booking-consent"><input type="checkbox" name="international_license" value="1" /><span>Patente internazionale</span></label></div><label class="gwr-booking-field gwr-booking-field--wide"><span>Note conducente</span><textarea name="driver_notes" rows="3"></textarea></label></fieldset>',
+      '<input type="text" name="website" value="" class="gwr-booking-honeypot" tabindex="-1" autocomplete="off" aria-hidden="true" />',
+      '<div class="gwr-booking-actions"><button type="button" class="gwr-button-secondary" data-gwr-booking-back="1">Indietro</button><button type="button" class="gwr-button" data-gwr-booking-next="3">Continua al riepilogo</button></div></section>',
+      '<section class="gwr-booking-step" data-gwr-booking-step="3" hidden><header><span>Verifica finale</span><h3>Controlla e conferma la richiesta</h3><p>Il prezzo definitivo viene ricalcolato dal server prima del salvataggio.</p></header><div class="gwr-booking-review" data-gwr-booking-review></div>',
+      requiredDocuments.length ? '<fieldset><legend>Documenti richiesti</legend><p>Confermo di essere in possesso di:</p><div class="gwr-booking-consents">' + documentMarkup + '</div></fieldset>' : '',
+      '<fieldset><legend>Consensi</legend><div class="gwr-booking-consents"><label class="gwr-booking-consent"><input type="checkbox" name="consent_privacy" value="1" required /><span>Accetto l informativa privacy' + (privacyUrl ? ' <a href="' + escapeHtml(privacyUrl) + '" target="_blank" rel="noopener noreferrer">consulta</a>' : '') + ' <strong>(obbligatorio)</strong></span></label><label class="gwr-booking-consent"><input type="checkbox" name="consent_terms" value="1" required /><span>Accetto le condizioni generali' + (termsUrl ? ' <a href="' + escapeHtml(termsUrl) + '" target="_blank" rel="noopener noreferrer">consulta</a>' : '') + ' <strong>(obbligatorio)</strong></span></label><label class="gwr-booking-consent"><input type="checkbox" name="consent_cancellation" value="1" /><span>Dichiaro di aver letto la politica di cancellazione' + (cancellationUrl ? ' <a href="' + escapeHtml(cancellationUrl) + '" target="_blank" rel="noopener noreferrer">consulta</a>' : '') + '</span></label><label class="gwr-booking-consent"><input type="checkbox" name="consent_marketing" value="1" /><span>Acconsento a comunicazioni commerciali <small>(facoltativo)</small></span></label><label class="gwr-booking-consent"><input type="checkbox" name="consent_third_party" value="1" /><span>Acconsento alla comunicazione a terzi quando necessaria al servizio <small>(facoltativo)</small></span></label></div></fieldset>',
+      '<div class="gwr-booking-actions"><button type="button" class="gwr-button-secondary" data-gwr-booking-back="1">Modifica veicolo o extra</button><button type="button" class="gwr-button-secondary" data-gwr-booking-back="2">Modifica dati</button><button type="submit" class="gwr-button" data-gwr-booking-submit>Conferma prenotazione</button></div></section>',
+      '<section class="gwr-booking-step gwr-booking-confirmation" data-gwr-booking-step="4" hidden><div class="gwr-booking-confirmation__icon" aria-hidden="true">&#10003;</div><span>Richiesta registrata</span><h3 data-gwr-confirmation-title>Grazie</h3><p>La prenotazione non e ancora confermata: il concessionario verifichera la richiesta e ti contattera.</p><div class="gwr-booking-confirmation__summary" data-gwr-confirmation-summary></div><div class="gwr-booking-actions"><button type="button" class="gwr-button-secondary" data-gwr-print-confirmation>Stampa</button><a class="gwr-button" href="#" data-gwr-confirmation-whatsapp hidden>Contatta su WhatsApp</a><button type="button" class="gwr-button-secondary" data-gwr-close-modal>Torna al catalogo</button></div></section>',
+      '</form>'
+    ].join('');
+  }
+
   function formatMinorAmount(minor, currency) {
     return new Intl.NumberFormat('it-IT', { style: 'currency', currency: currency || 'EUR' }).format((Number(minor) || 0) / 100);
   }
@@ -445,6 +486,160 @@
     qsa(modal, '[data-gwr-summary-total], [data-gwr-grand-total], [data-gwr-mobile-total]').forEach(function (node) { node.textContent = totalLabel; });
   }
 
+  function setBookingStep(modal, step) {
+    var flow = qs(modal, '[data-gwr-booking-flow]');
+    var configurator = qs(modal, '[data-gwr-configurator]');
+    if (!flow || !configurator) return;
+    var body = qs(configurator, '.gwr-vehicle-configurator__body');
+    var mobileBar = qs(configurator, '.gwr-config-mobile-bar');
+    var inFlow = step > 1;
+    flow.hidden = !inFlow;
+    if (body) body.hidden = inFlow;
+    if (mobileBar) mobileBar.hidden = inFlow;
+    configurator.classList.toggle('is-booking-flow', inFlow);
+    qsa(flow, '[data-gwr-booking-step]').forEach(function (panel) { panel.hidden = Number(panel.getAttribute('data-gwr-booking-step')) !== step; });
+    qsa(flow, '[data-gwr-step-indicator]').forEach(function (indicator) {
+      var number = Number(indicator.getAttribute('data-gwr-step-indicator'));
+      indicator.classList.toggle('is-complete', number < step);
+      indicator.classList.toggle('is-current', number === step);
+      if (number === step) indicator.setAttribute('aria-current', 'step'); else indicator.removeAttribute('aria-current');
+    });
+    var heading = qs(flow, '[data-gwr-booking-step="' + step + '"] h3');
+    if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
+    var content = qs(modal, '[data-gwr-modal-content]');
+    if (content) content.scrollTop = 0;
+  }
+
+  function showBookingError(form, message, fieldName) {
+    var box = qs(form, '[data-gwr-booking-errors]');
+    if (box) { box.textContent = message; box.hidden = false; box.focus(); }
+    if (fieldName) {
+      var field = qs(form, '[name="' + fieldName + '"]');
+      if (field) { field.setAttribute('aria-invalid', 'true'); field.focus(); }
+    }
+  }
+
+  function clearBookingErrors(form) {
+    var box = qs(form, '[data-gwr-booking-errors]');
+    if (box) { box.hidden = true; box.textContent = ''; }
+    qsa(form, '[aria-invalid="true"]').forEach(function (field) { field.removeAttribute('aria-invalid'); });
+  }
+
+  function syncBookingConditionalFields(form) {
+    var company = qs(form, '[data-gwr-company-fields]');
+    var customerType = qs(form, '[data-gwr-customer-type]');
+    var isCompany = customerType && customerType.value === 'company';
+    if (company) company.hidden = !isCompany;
+    ['company_name', 'vat_number'].forEach(function (name) { var field = qs(form, '[name="' + name + '"]'); if (field) field.required = isCompany; });
+    var same = qs(form, '[data-gwr-driver-same]');
+    var identity = qs(form, '[data-gwr-driver-identity]');
+    var driverSame = !same || same.checked;
+    if (identity) identity.hidden = driverSame;
+    ['driver_first_name', 'driver_last_name', 'driver_birth_date'].forEach(function (name) { var field = qs(form, '[name="' + name + '"]'); if (field) field.required = !driverSame; });
+  }
+
+  function validateBookingStep(form, step) {
+    clearBookingErrors(form);
+    syncBookingConditionalFields(form);
+    var panel = qs(form, '[data-gwr-booking-step="' + step + '"]');
+    var fields = qsa(panel, 'input, select, textarea').filter(function (field) { return !field.disabled && !field.closest('[hidden]'); });
+    for (var index = 0; index < fields.length; index += 1) {
+      var field = fields[index];
+      var invalid = field.required && ((field.type === 'checkbox' && !field.checked) || (field.type !== 'checkbox' && !String(field.value || '').trim()));
+      if (!invalid && field.type === 'email' && field.value) invalid = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(field.value);
+      if (!invalid && field.name.indexOf('phone') !== -1 && field.value) invalid = field.value.replace(/\D/g, '').length < 7;
+      if (invalid) {
+        field.setAttribute('aria-invalid', 'true');
+        showBookingError(form, 'Controlla i campi obbligatori evidenziati.', field.name);
+        return false;
+      }
+    }
+    var issue = qs(form, '[name="license_issue_date"]');
+    var expiry = qs(form, '[name="license_expiry_date"]');
+    if (step === 2 && issue && expiry && issue.value && expiry.value && expiry.value <= issue.value) {
+      showBookingError(form, 'La scadenza della patente deve essere successiva alla data di rilascio.', 'license_expiry_date');
+      return false;
+    }
+    return true;
+  }
+
+  function selectedBookingOptions(modal) {
+    var result = { extras: [], coverages: [], labels: [] };
+    qsa(modal, '[data-gwr-option]').forEach(function (option) {
+      var toggle = qs(option, '[data-gwr-option-toggle]');
+      if (!toggle || !toggle.checked) return;
+      var quantityInput = qs(option, '[data-gwr-option-quantity]');
+      var quantity = quantityInput ? Math.max(1, Number(quantityInput.value) || 1) : 1;
+      var kind = option.getAttribute('data-gwr-option-kind');
+      if (kind === 'extra') result.extras.push({ id: toggle.value, quantity: quantity });
+      if (kind === 'coverage') result.coverages.push(toggle.value);
+      result.labels.push((option.getAttribute('data-gwr-option-name') || 'Opzione') + (quantity > 1 ? ' x' + quantity : ''));
+    });
+    return result;
+  }
+
+  function renderBookingReview(modal) {
+    var form = qs(modal, '[data-gwr-booking-flow]');
+    var review = qs(form, '[data-gwr-booking-review]');
+    if (!form || !review || !activeBookingContext) return;
+    var data = new FormData(form);
+    var vehicle = activeBookingContext.vehicle;
+    var dates = activeBookingContext.dates;
+    var options = selectedBookingOptions(modal);
+    var customer = [data.get('customer_first_name'), data.get('customer_last_name')].filter(Boolean).join(' ');
+    var driver = data.get('driver_same') ? customer : [data.get('driver_first_name'), data.get('driver_last_name')].filter(Boolean).join(' ');
+    var estimate = qs(modal, '[data-gwr-summary-total]');
+    review.innerHTML = '<div class="gwr-booking-review__grid"><div><span>Veicolo</span><strong>' + escapeHtml(vehicle.title || [vehicle.brand, vehicle.model].filter(Boolean).join(' ')) + '</strong></div><div><span>Periodo</span><strong>' + escapeHtml(isoToItalianDate(dates.start_date) + ' ' + dates.pickup_time + ' - ' + isoToItalianDate(dates.end_date) + ' ' + dates.return_time) + '</strong></div><div><span>Localita</span><strong>' + escapeHtml((dates.pickup_location || vehicle.location) + ' - ' + (dates.return_location || dates.pickup_location || vehicle.location)) + '</strong></div><div><span>Cliente</span><strong>' + escapeHtml(customer) + '</strong></div><div><span>Conducente</span><strong>' + escapeHtml(driver) + '</strong></div><div><span>Stima frontend</span><strong>' + escapeHtml(estimate ? estimate.textContent : 'Ricalcolo al server') + '</strong></div></div>' + (options.labels.length ? '<div class="gwr-booking-review__options"><span>Extra e coperture</span><ul>' + options.labels.map(function (label) { return '<li>' + escapeHtml(label) + '</li>'; }).join('') + '</ul></div>' : '');
+  }
+
+  function bookingPayload(modal) {
+    var form = qs(modal, '[data-gwr-booking-flow]');
+    var data = new FormData(form);
+    var context = activeBookingContext;
+    var options = selectedBookingOptions(modal);
+    function value(name) { return String(data.get(name) || '').trim(); }
+    return {
+      vehicle_id: context.vehicle.id,
+      pickup_location: context.dates.pickup_location || context.vehicle.location || '',
+      return_location: context.dates.different_return === '1' ? (context.dates.return_location || '') : (context.dates.pickup_location || context.vehicle.location || ''),
+      start_date: context.dates.start_date, end_date: context.dates.end_date, pickup_time: context.dates.pickup_time, return_time: context.dates.return_time,
+      form_started_at: context.startedAt, website: value('website'), driver_same: !!data.get('driver_same'), selection: { extras: options.extras, coverages: options.coverages }, document_confirmations: data.getAll('document_confirmation'),
+      customer: { customer_type:value('customer_type'), first_name:value('customer_first_name'), last_name:value('customer_last_name'), email:value('customer_email'), phone:value('customer_phone'), tax_code:value('customer_tax_code'), birth_date:value('customer_birth_date'), birth_place:value('customer_birth_place'), nationality:value('customer_nationality'), address:value('customer_address'), postal_code:value('customer_postal_code'), city:value('customer_city'), province:value('customer_province'), country:value('customer_country'), company_name:value('company_name'), vat_number:value('vat_number'), company_tax_code:value('company_tax_code'), pec:value('pec'), recipient_code:value('recipient_code'), registered_office:value('registered_office'), contact_person:value('contact_person'), notes:value('customer_notes') },
+      driver: { first_name:value('driver_first_name'), last_name:value('driver_last_name'), birth_date:value('driver_birth_date'), birth_place:value('driver_birth_place'), nationality:value('driver_nationality'), tax_code:value('driver_tax_code'), email:value('driver_email'), phone:value('driver_phone'), address:value('driver_address'), license_type:value('license_type'), license_number:value('license_number'), license_country:value('license_country'), license_issue_date:value('license_issue_date'), license_expiry_date:value('license_expiry_date'), international_license:!!data.get('international_license'), notes:value('driver_notes') },
+      consents: { privacy:!!data.get('consent_privacy'), terms:!!data.get('consent_terms'), cancellation:!!data.get('consent_cancellation'), marketing:!!data.get('consent_marketing'), third_party:!!data.get('consent_third_party') }
+    };
+  }
+
+  function submitBooking(modal) {
+    var form = qs(modal, '[data-gwr-booking-flow]');
+    var button = qs(form, '[data-gwr-booking-submit]');
+    if (!form || !button || form.dataset.submitting === '1') return;
+    if (!validateBookingStep(form, 3)) return;
+    form.dataset.submitting = '1';
+    button.disabled = true;
+    button.textContent = 'Invio in corso...';
+    var body = new URLSearchParams();
+    body.set('action', 'gwr_create_booking'); body.set('nonce', catalogConfig().nonce || ''); body.set('booking', JSON.stringify(bookingPayload(modal)));
+    window.fetch(catalogConfig().ajaxUrl, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}, body:body.toString() }).then(function (response) { return response.json(); }).then(function (payload) {
+      if (!payload || !payload.success) throw new Error(payload && payload.data && payload.data.message ? payload.data.message : 'Impossibile completare la prenotazione.');
+      var confirmation = payload.data;
+      var title = qs(form, '[data-gwr-confirmation-title]');
+      var summary = qs(form, '[data-gwr-confirmation-summary]');
+      if (title) title.textContent = 'Prenotazione ' + confirmation.booking_code;
+      if (summary) summary.innerHTML = '<div><span>Codice</span><strong>' + escapeHtml(confirmation.booking_code) + '</strong></div><div><span>Stato</span><strong>' + escapeHtml(confirmation.status) + '</strong></div><div><span>Veicolo</span><strong>' + escapeHtml(confirmation.vehicle) + '</strong></div><div><span>Periodo</span><strong>' + escapeHtml(confirmation.period) + '</strong></div><div><span>Totale server</span><strong>' + escapeHtml(confirmation.total) + '</strong></div>';
+      var whatsapp = qs(form, '[data-gwr-confirmation-whatsapp]');
+      var number = String((catalogConfig().contact || {}).whatsappNumber || '').replace(/\D/g, '');
+      var formData = new FormData(form);
+      var customerName = [formData.get('customer_first_name'), formData.get('customer_last_name')].filter(Boolean).join(' ');
+      if (whatsapp && number) { whatsapp.href = 'https://wa.me/' + number + '?text=' + encodeURIComponent('Ciao, sono ' + customerName + ' e vorrei informazioni sulla prenotazione ' + confirmation.booking_code + ' per ' + confirmation.vehicle + '. Periodo: ' + confirmation.period + '.'); whatsapp.hidden = false; }
+      setBookingStep(modal, 4);
+      activeBookingContext = null;
+      form.dataset.submitting = '0';
+    }).catch(function (error) {
+      form.dataset.submitting = '0'; button.disabled = false; button.textContent = 'Conferma prenotazione'; showBookingError(form, error.message || 'Errore durante l invio. Riprova.', '');
+    });
+  }
+
   function renderModalContent(vehicle, dates) {
     var cfg = catalogConfig();
     dates = dates || {};
@@ -513,7 +708,7 @@
     ]);
     var driver = rentalTerms.driver_requirements || {};
     var driverRequirements = policyDescription(driver, [
-      ['Eta minima', valueWithUnit(driver.min_age, 'anni')], ['Eta massima', valueWithUnit(driver.max_age, 'anni')], ['Patente posseduta da', valueWithUnit(driver.min_license_years, 'anni')], ['Patente internazionale', driver.international_license], ['Patente UE', driver.eu_license], ['Supplemento giovane', driver.young_driver_surcharge], ['Supplemento senior', driver.senior_driver_surcharge], ['Costo supplemento', moneyValue(driver.surcharge_cost, currency)], ['Conducenti aggiuntivi', driver.additional_drivers], ['Numero massimo', driver.max_drivers]
+      ['Eta minima', valueWithUnit(driver.min_age, 'anni')], ['Eta massima', valueWithUnit(driver.max_age, 'anni')], ['Patente posseduta da', valueWithUnit(driver.min_license_years, 'anni')], ['Patente internazionale', driver.international_license], ['Patente UE', driver.eu_license], ['Supplemento giovane', driver.young_driver_surcharge], ['Soglia giovane', valueWithUnit(driver.young_driver_max_age, 'anni')], ['Supplemento senior', driver.senior_driver_surcharge], ['Soglia senior', valueWithUnit(driver.senior_driver_min_age, 'anni')], ['Costo supplemento', moneyValue(driver.surcharge_cost, currency)], ['Conducenti aggiuntivi', driver.additional_drivers], ['Numero massimo', driver.max_drivers]
     ]);
     var documents = termsList((rentalTerms.required_documents || []).map(function (row) {
       var details = [row.required ? 'Obbligatorio' : '', row.at_pickup ? 'Al ritiro' : '', row.at_booking ? 'In fase di prenotazione' : '', row.private_customer ? 'Privati' : '', row.business_customer ? 'Aziende' : ''].filter(Boolean).join(' \u00b7 ');
@@ -575,9 +770,10 @@
     var primaryHref = links.whatsapp || links.email || '';
     var primaryChannel = links.whatsapp ? 'WhatsApp' : (links.email ? 'Email' : '');
     var primaryAttrs = links.whatsapp ? ' target="_blank" rel="noopener noreferrer"' : '';
-    var primaryAction = primaryHref ? '<a class="gwr-config-primary-action" href="' + escapeHtml(primaryHref) + '"' + primaryAttrs + ' data-gwr-primary-contact><span>Richiedi disponibilita</span><small>via ' + escapeHtml(primaryChannel) + '</small></a>' : '<button type="button" class="gwr-config-primary-action" disabled>Contatti non configurati</button>';
-    var secondaryContact = links.whatsapp && links.email ? '<a class="gwr-contact-action is-email" href="' + escapeHtml(links.email) + '">' + iconSvg('mail') + '<span>Email</span></a>' : '';
-    var contactPanel = '<section class="gwr-config-contact"><h3>Contatta il concessionario</h3><p>' + escapeHtml(privacyNote) + '</p>' + primaryAction + secondaryContact + '</section>';
+    var canBook = !!(dates.start_date && dates.end_date && dates.pickup_time && dates.return_time && vehicle.daily_price_amount);
+    var bookingAction = canBook ? '<button type="button" class="gwr-config-primary-action" data-gwr-start-booking><span>Prenota il veicolo</span><small>richiesta senza pagamento</small></button>' : '<button type="button" class="gwr-config-primary-action" disabled><span>Completa date e tariffa</span><small>necessarie per prenotare</small></button>';
+    var contactActions = (links.whatsapp ? '<a class="gwr-contact-action is-whatsapp" href="' + escapeHtml(links.whatsapp) + '" target="_blank" rel="noopener noreferrer" data-gwr-primary-contact>' + iconSvg('whatsapp') + '<span>WhatsApp</span></a>' : '') + (links.email ? '<a class="gwr-contact-action is-email" href="' + escapeHtml(links.email) + '">' + iconSvg('mail') + '<span>Email</span></a>' : '');
+    var contactPanel = '<section class="gwr-config-contact"><h3>Prenotazione e contatti</h3><p>' + escapeHtml(privacyNote) + '</p>' + bookingAction + (contactActions ? '<div class="gwr-modal-contact__actions">' + contactActions + '</div>' : '') + '</section>';
 
     var taxLabel = generalTerms.taxes === 'included' ? 'Incluse' : (generalTerms.taxes === 'excluded' ? 'Escluse' : '');
     var priceRows = (vehicle.daily_price ? '<div><span>Tariffa giornaliera</span><strong>' + escapeHtml(vehicle.daily_price) + '</strong></div>' : '') + '<div data-gwr-base-row' + (baseMinor ? '' : ' hidden') + '><span>Stima base</span><strong data-gwr-base-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : '') + '</strong></div><div data-gwr-options-row hidden><span>Coperture ed extra</span><strong data-gwr-options-total></strong></div>' + (taxLabel ? '<div><span>Tasse</span><strong>' + escapeHtml(taxLabel) + '</strong></div>' : '') + '<div><span>Stima totale</span><strong data-gwr-grand-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : 'Su richiesta') + '</strong></div>';
@@ -596,7 +792,7 @@
       '</aside>'
     ].join('');
 
-    var mobileAction = '<div class="gwr-config-mobile-bar"><div><span>Stima totale</span><strong data-gwr-mobile-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : 'Su richiesta') + '</strong><small>' + escapeHtml(duration) + '</small></div>' + (primaryHref ? '<a href="' + escapeHtml(primaryHref) + '"' + primaryAttrs + ' data-gwr-primary-contact>Richiedi disponibilita</a>' : '<button type="button" disabled>Contatti non configurati</button>') + '</div>';
+    var mobileAction = '<div class="gwr-config-mobile-bar"><div><span>Stima totale</span><strong data-gwr-mobile-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : 'Su richiesta') + '</strong><small>' + escapeHtml(duration) + '</small></div>' + (canBook ? '<button type="button" data-gwr-start-booking>Prenota</button>' : '<button type="button" disabled>Completa le date</button>') + '</div>';
 
     return [
       '<div class="gwr-vehicle-configurator" data-gwr-configurator data-gwr-vehicle-id="' + escapeHtml(vehicle.id || '') + '">',
@@ -614,6 +810,7 @@
       summary,
       '</div>',
       mobileAction,
+      bookingFlowMarkup(vehicle, dates, generalTerms, rentalTerms.required_documents || [], rentalTerms.cancellation_policy || {}),
       '</div>'
     ].join('');
   }
@@ -673,6 +870,7 @@
     if (closeButton) closeButton.focus();
     loadVehicleDetails(vehicle).then(function (fullVehicle) {
       if (!modal.classList.contains('is-open')) return;
+      activeBookingContext = { vehicle: fullVehicle, dates: dates, startedAt: Math.floor(Date.now() / 1000) };
       content.innerHTML = renderModalContent(fullVehicle, dates);
       content.scrollTop = 0;
       prepareModalSections(modal);
@@ -697,6 +895,7 @@
     galleryTouchStartX = null;
     galleryTouchModal = null;
     lastContactActivation = 0;
+    activeBookingContext = null;
     if (lastModalTrigger && document.contains(lastModalTrigger)) lastModalTrigger.focus();
     lastModalTrigger = null;
   }
@@ -1149,6 +1348,22 @@
     if (closeTrigger) { closeModal(closeTrigger.closest('[data-gwr-modal]')); return; }
     var modal = event.target.closest('[data-gwr-modal]');
     if (!modal) return;
+    var startBooking = event.target.closest('[data-gwr-start-booking]');
+    if (startBooking) {
+      var bookingForm = qs(modal, '[data-gwr-booking-flow]');
+      if (bookingForm) { syncBookingConditionalFields(bookingForm); setBookingStep(modal, 2); }
+      return;
+    }
+    var bookingNext = event.target.closest('[data-gwr-booking-next]');
+    if (bookingNext) {
+      var flow = qs(modal, '[data-gwr-booking-flow]');
+      var nextStep = Number(bookingNext.getAttribute('data-gwr-booking-next'));
+      if (flow && validateBookingStep(flow, nextStep - 1)) { if (nextStep === 3) renderBookingReview(modal); setBookingStep(modal, nextStep); }
+      return;
+    }
+    var bookingBack = event.target.closest('[data-gwr-booking-back]');
+    if (bookingBack) { setBookingStep(modal, Number(bookingBack.getAttribute('data-gwr-booking-back'))); return; }
+    if (event.target.closest('[data-gwr-print-confirmation]')) { window.print(); return; }
     var active = galleryActiveIndex(modal);
     if (event.target.closest('[data-gwr-gallery-prev]')) { setGalleryImage(modal, active - 1); return; }
     if (event.target.closest('[data-gwr-gallery-next]')) { setGalleryImage(modal, active + 1); return; }
@@ -1203,9 +1418,18 @@
   }, true);
 
   document.addEventListener('change', function (event) {
-    if (!event.target.matches('[data-gwr-option-quantity]')) return;
     var modal = event.target.closest('[data-gwr-modal]');
-    if (modal) updateRentalSummary(modal);
+    if (!modal) return;
+    if (event.target.matches('[data-gwr-option-quantity]')) updateRentalSummary(modal);
+    if (event.target.matches('[data-gwr-customer-type], [data-gwr-driver-same]')) syncBookingConditionalFields(qs(modal, '[data-gwr-booking-flow]'));
+  });
+
+  document.addEventListener('submit', function (event) {
+    var form = event.target.closest('[data-gwr-booking-flow]');
+    if (!form) return;
+    event.preventDefault();
+    var modal = form.closest('[data-gwr-modal]');
+    if (modal) submitBooking(modal);
   });
 
   document.addEventListener('touchstart', function (event) {

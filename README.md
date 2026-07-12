@@ -47,6 +47,7 @@ Sottomenu:
 - Veicoli
 - Aggiungi veicolo
 - Disponibilita
+- Prenotazioni
 - Condizioni di noleggio
 - Impostazioni
 
@@ -78,6 +79,16 @@ Vai in **Gest Web Rent > Condizioni di noleggio** per configurare i valori globa
 Nel form di modifica del veicolo la sezione **Condizioni di noleggio** permette di ereditare ogni gruppo globale oppure conservarne una versione personalizzata. Gli extra possono essere associati a tutti i veicoli, a specifici ID o a categorie veicolo.
 
 Le quantita degli extra sono informative: il controllo della disponibilita reale richiedera il futuro modulo prenotazioni e non viene simulato in questa versione.
+
+## Prenotazioni
+
+Dal configuratore frontend il cliente puo completare quattro step: veicolo ed extra, dati cliente/conducente, riepilogo e consensi, conferma. Il server ricalcola tariffa giornaliera, coperture, extra, supplementi e tasse senza fidarsi del totale JavaScript.
+
+Le richieste vengono salvate in `wp_gwr_bookings`, con righe economiche in `wp_gwr_booking_items` e cronologia in `wp_gwr_booking_logs`. La creazione usa un lock MySQL per veicolo e una transazione che ricontrolla disponibilita, salva snapshot e righe e crea il blocco in `wp_gwr_availability`.
+
+L area **Gest Web Rent > Prenotazioni** permette ricerca, filtri, paginazione, modifica controllata, transizioni di stato, consegna, riconsegna e stampa. Le richieste in attesa scadono secondo il valore configurato in Impostazioni e liberano il veicolo tramite WP-Cron.
+
+Questa versione non include gateway di pagamento, account cliente, fatturazione o annullamento self-service. La quantita extra resta informativa finche non esistera un inventario prenotabile dedicato.
 
 ## Foto Veicolo
 
@@ -176,5 +187,5 @@ Ogni release deve aggiornare:
 Release corrente:
 
 ```text
-1.5.0
+1.6.0
 ```

@@ -47,6 +47,10 @@ class GWR_Admin {
 			'email_body'          => "Buongiorno,\nvorrei ricevere informazioni sul noleggio del veicolo {vehicle_title}.\n\nDate di interesse:\nDal {start_date} al {end_date}\n\nGrazie.",
 			'privacy_note'        => __( 'La disponibilita e indicativa e deve essere confermata dal concessionario.', 'gest-web-rent' ),
 			'github_access_token' => '',
+			'booking_prefix'      => 'GWR',
+			'pending_expiry_hours'=> 24,
+			'privacy_version'     => '1.0',
+			'privacy_url'         => '',
 		);
 	}
 
@@ -75,6 +79,8 @@ class GWR_Admin {
 		add_submenu_page( 'gest-web-rent', __( 'Veicoli', 'gest-web-rent' ), __( 'Veicoli', 'gest-web-rent' ), 'manage_options', 'gwr-vehicles', array( __CLASS__, 'vehicles_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Aggiungi veicolo', 'gest-web-rent' ), __( 'Aggiungi veicolo', 'gest-web-rent' ), 'manage_options', 'gwr-vehicle-edit', array( __CLASS__, 'vehicle_edit_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Disponibilita', 'gest-web-rent' ), __( 'Disponibilita', 'gest-web-rent' ), 'manage_options', 'gwr-availability', array( __CLASS__, 'availability_page' ) );
+		add_submenu_page( 'gest-web-rent', __( 'Prenotazioni', 'gest-web-rent' ), __( 'Prenotazioni', 'gest-web-rent' ), 'manage_options', 'gwr-bookings', array( 'GWR_Bookings_Admin', 'list_page' ) );
+		add_submenu_page( null, __( 'Dettaglio prenotazione', 'gest-web-rent' ), __( 'Dettaglio prenotazione', 'gest-web-rent' ), 'manage_options', 'gwr-booking-detail', array( 'GWR_Bookings_Admin', 'detail_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Condizioni di noleggio', 'gest-web-rent' ), __( 'Condizioni di noleggio', 'gest-web-rent' ), 'manage_options', 'gwr-rental-terms', array( 'GWR_Rental_Terms_Admin', 'page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Impostazioni', 'gest-web-rent' ), __( 'Impostazioni', 'gest-web-rent' ), 'manage_options', 'gwr-settings', array( __CLASS__, 'settings_page' ) );
 	}
@@ -147,6 +153,10 @@ class GWR_Admin {
 			'email_subject'       => isset( $input['email_subject'] ) ? sanitize_text_field( $input['email_subject'] ) : '',
 			'email_body'          => isset( $input['email_body'] ) ? sanitize_textarea_field( $input['email_body'] ) : '',
 			'privacy_note'        => isset( $input['privacy_note'] ) ? sanitize_textarea_field( $input['privacy_note'] ) : '',
+			'booking_prefix'      => isset( $input['booking_prefix'] ) ? strtoupper( preg_replace( '/[^A-Z0-9]/', '', sanitize_text_field( $input['booking_prefix'] ) ) ) : 'GWR',
+			'pending_expiry_hours'=> isset( $input['pending_expiry_hours'] ) ? max( 1, min( 168, absint( $input['pending_expiry_hours'] ) ) ) : 24,
+			'privacy_version'     => isset( $input['privacy_version'] ) ? sanitize_text_field( $input['privacy_version'] ) : '1.0',
+			'privacy_url'         => isset( $input['privacy_url'] ) ? esc_url_raw( $input['privacy_url'] ) : '',
 			'github_access_token' => $existing['github_access_token'] ?? '',
 		);
 
@@ -659,6 +669,15 @@ class GWR_Admin {
 		echo '</div>';
 		self::section_close();
 
+		self::section_open( __( 'Prenotazioni', 'gest-web-rent' ), __( 'Codice pratica, scadenza delle richieste in attesa e versione informativa privacy.', 'gest-web-rent' ) );
+		echo '<div class="gwr-field-grid gwr-field-grid--triple">';
+		self::setting_field( 'booking_prefix', __( 'Prefisso prenotazione', 'gest-web-rent' ), $settings['booking_prefix'], 'text', 'GWR' );
+		self::setting_field( 'pending_expiry_hours', __( 'Scadenza richieste (ore)', 'gest-web-rent' ), $settings['pending_expiry_hours'], 'number', '24' );
+		self::setting_field( 'privacy_version', __( 'Versione informativa privacy', 'gest-web-rent' ), $settings['privacy_version'], 'text', '1.0' );
+		self::setting_field( 'privacy_url', __( 'Link informativa privacy', 'gest-web-rent' ), $settings['privacy_url'], 'url', 'https://example.com/privacy' );
+		echo '</div>';
+		self::section_close();
+
 		self::section_open( __( 'Aggiornamenti GitHub', 'gest-web-rent' ), __( 'Per repository pubbliche non serve token. Per repository private usa un token lato server.', 'gest-web-rent' ) );
 		self::github_token_field( $settings );
 		self::section_close();
@@ -709,6 +728,7 @@ class GWR_Admin {
 			'vehicles'     => array( 'label' => __( 'Veicoli', 'gest-web-rent' ), 'url' => self::vehicles_url() ),
 			'add'          => array( 'label' => __( 'Aggiungi veicolo', 'gest-web-rent' ), 'url' => self::vehicle_edit_url() ),
 			'availability' => array( 'label' => __( 'Disponibilita', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-availability' ) ),
+			'bookings'     => array( 'label' => __( 'Prenotazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-bookings' ) ),
 			'terms'        => array( 'label' => __( 'Condizioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-rental-terms' ) ),
 			'settings'     => array( 'label' => __( 'Impostazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-settings' ) ),
 		);
