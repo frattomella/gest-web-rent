@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0
+
+- Aggiunta pagina amministrativa `Condizioni di noleggio` con navigazione per sezioni.
+- Introdotti termini globali e override indipendenti per ogni veicolo.
+- Aggiunti repeater sanitizzati e ordinabili per servizi, coperture, documenti, extra e FAQ.
+- Centralizzati normalizzazione, ereditarieta e payload pubblico in `GWR_Rental_Terms`.
+- Collegato il configuratore ai dati commerciali reali tramite dettaglio AJAX on demand.
+- Aggiunta selezione di coperture ed extra con calcolo in centesimi e riepilogo `aria-live`.
+- Inizializzazione idempotente delle opzioni senza nuove tabelle o perdita dei dati esistenti.
+
 ## 1.4.0
 
 - Sostituito il vecchio popup con un configuratore veicolo quasi fullscreen e responsive.

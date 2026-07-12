@@ -3,7 +3,7 @@
  * Plugin Name: Gest Web Rent
  * Plugin URI: https://github.com/frattomella/gest-web-rent
  * Description: Gestione veicoli a noleggio con catalogo frontend, disponibilita e contatti WhatsApp Business/email.
- * Version: 1.4.0
+ * Version: 1.5.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Francesco Frattomella
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GWR_VERSION', '1.4.0' );
+define( 'GWR_VERSION', '1.5.0' );
 define( 'GWR_PLUGIN_FILE', __FILE__ );
 define( 'GWR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'GWR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -46,7 +46,9 @@ function gwr_asset_version( $relative_path ) {
 
 require_once GWR_PLUGIN_DIR . 'includes/class-gwr-github-updater.php';
 require_once GWR_PLUGIN_DIR . 'includes/class-gwr-cpt.php';
+require_once GWR_PLUGIN_DIR . 'includes/class-gwr-rental-terms.php';
 require_once GWR_PLUGIN_DIR . 'includes/class-gwr-admin.php';
+require_once GWR_PLUGIN_DIR . 'includes/class-gwr-rental-terms-admin.php';
 require_once GWR_PLUGIN_DIR . 'includes/class-gwr-frontend.php';
 require_once GWR_PLUGIN_DIR . 'includes/class-gwr-blocks.php';
 require_once GWR_PLUGIN_DIR . 'includes/class-gwr-core.php';

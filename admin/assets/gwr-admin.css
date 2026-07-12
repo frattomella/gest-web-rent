@@ -573,6 +573,161 @@
   gap: 16px;
 }
 
+.gwr-terms-form,
+.gwr-vehicle-terms {
+  display: grid;
+  gap: 18px;
+}
+
+.gwr-terms-tabs {
+  position: sticky;
+  top: 32px;
+  z-index: 12;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px;
+  border: 1px solid var(--gwr-border);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, .08);
+  backdrop-filter: blur(14px);
+  scrollbar-width: thin;
+}
+
+.gwr-terms-tabs a {
+  flex: 0 0 auto;
+  padding: 9px 13px;
+  border-radius: 999px;
+  color: var(--gwr-muted);
+  text-decoration: none;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.gwr-terms-tabs a:hover,
+.gwr-terms-tabs a:focus {
+  color: var(--gwr-accent-strong);
+  background: #eaf1ff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
+
+.gwr-terms-section {
+  scroll-margin-top: 105px;
+  display: grid;
+  gap: 20px;
+  padding: 24px;
+  border: 1px solid var(--gwr-border);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, .05);
+}
+
+.gwr-terms-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.gwr-terms-section__header h2 {
+  margin: 5px 0 0;
+  font-size: 24px;
+}
+
+.gwr-terms-section__header p {
+  margin: 7px 0 0;
+  color: var(--gwr-muted);
+}
+
+.gwr-inherit-switch {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px 9px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--gwr-border);
+  border-radius: 16px;
+  background: var(--gwr-surface-soft);
+}
+
+.gwr-inherit-switch strong {
+  grid-column: 2;
+  color: var(--gwr-accent-strong);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.gwr-terms-section.is-inherited .gwr-terms-section__body {
+  opacity: .48;
+  filter: grayscale(.25);
+  pointer-events: none;
+}
+
+.gwr-field.is-conditionally-inactive,
+.gwr-check-card.is-conditionally-inactive {
+  opacity: .45;
+  pointer-events: none;
+}
+
+.gwr-repeater,
+.gwr-repeater__rows {
+  display: grid;
+  gap: 14px;
+}
+
+.gwr-repeater-row {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--gwr-border);
+  border-radius: 20px;
+  background: linear-gradient(180deg, #fff, #f8fbff);
+}
+
+.gwr-repeater-row:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, .12);
+}
+
+.gwr-repeater-row > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.gwr-repeater-row__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.gwr-repeater__empty,
+.gwr-empty-state {
+  display: grid;
+  gap: 6px;
+  padding: 22px;
+  border: 1px dashed var(--gwr-border-strong);
+  border-radius: 18px;
+  color: var(--gwr-muted);
+  text-align: center;
+  background: #fafcff;
+}
+
+.gwr-repeater__empty[hidden] {
+  display: none;
+}
+
+@media (max-width: 782px) {
+  .gwr-terms-tabs {
+    top: 46px;
+  }
+}
+
 @media (max-width: 1280px) {
   .gwr-kpi-grid,
   .gwr-check-grid {
@@ -597,6 +752,17 @@
   .gwr-availability-row {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .gwr-terms-section__header,
+  .gwr-repeater-row > header {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .gwr-inherit-switch {
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .gwr-page-header h1 {

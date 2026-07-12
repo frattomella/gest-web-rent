@@ -17,6 +17,19 @@ class GWR_Frontend {
 		add_shortcode( 'gest_web_rent_catalog', array( __CLASS__, 'catalog_shortcode' ) );
 		add_action( 'wp_ajax_gwr_filter_catalog', array( __CLASS__, 'ajax_filter_catalog' ) );
 		add_action( 'wp_ajax_nopriv_gwr_filter_catalog', array( __CLASS__, 'ajax_filter_catalog' ) );
+		add_action( 'wp_ajax_gwr_vehicle_detail', array( __CLASS__, 'ajax_vehicle_detail' ) );
+		add_action( 'wp_ajax_nopriv_gwr_vehicle_detail', array( __CLASS__, 'ajax_vehicle_detail' ) );
+	}
+
+	/** Load the extended modal payload only when requested. */
+	public static function ajax_vehicle_detail() {
+		check_ajax_referer( 'gwr_catalog_nonce', 'nonce' );
+		$vehicle_id = isset( $_POST['vehicle_id'] ) ? absint( $_POST['vehicle_id'] ) : 0;
+		$vehicle = $vehicle_id ? GWR_CPT::get_vehicle( $vehicle_id ) : null;
+		if ( ! $vehicle || 'active' !== $vehicle['status'] ) {
+			wp_send_json_error( array( 'message' => __( 'Veicolo non disponibile.', 'gest-web-rent' ) ), 404 );
+		}
+		wp_send_json_success( array( 'vehicle' => GWR_CPT::public_payload( $vehicle, true ) ) );
 	}
 
 	public static function register_assets() {
@@ -320,7 +333,7 @@ class GWR_Frontend {
 	}
 
 	private static function card_markup( $vehicle, $filters, $index = 0 ) {
-		$payload = GWR_CPT::public_payload( $vehicle );
+		$payload = GWR_CPT::public_payload( $vehicle, false );
 		$cover = $payload['images'] ? $payload['images'][0] : array();
 		$primary_title = trim( $vehicle['brand'] . ' ' . $vehicle['model'] );
 		$primary_title = $primary_title ?: $vehicle['title'];

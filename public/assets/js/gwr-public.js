@@ -330,6 +330,121 @@
     return '<div class="gwr-booking-point"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(location || 'Localita da definire') + '</strong><small>' + escapeHtml(dateLabel + ' \u00b7 ' + timeLabel) + '</small></div>';
   }
 
+  function formatMinorAmount(minor, currency) {
+    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: currency || 'EUR' }).format((Number(minor) || 0) / 100);
+  }
+
+  function rentalDays(dates) {
+    var start = isoDateTimestamp(dates.start_date);
+    var end = isoDateTimestamp(dates.end_date);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
+    return Math.max(1, Math.ceil((end - start) / 86400000));
+  }
+
+  function moneyValue(value, currency) {
+    if (!hasValue(value)) return '';
+    var amount = Number(value);
+    return Number.isFinite(amount) ? formatMinorAmount(Math.round(amount * 100), currency) : '';
+  }
+
+  function termsList(rows, negative, currency) {
+    return (rows || []).map(function (row) {
+      var title = row.title || row.name;
+      if (!title) return '';
+      return '<li class="' + (negative ? 'is-excluded' : '') + '"><span aria-hidden="true">' + (negative ? '\u2212' : '\u2713') + '</span><div><strong>' + escapeHtml(title) + '</strong>' + (row.description ? '<p>' + escapeHtml(row.description) + '</p>' : '') + (row.note ? '<p>' + escapeHtml(row.note) + '</p>' : '') + (row.cost ? '<small>' + escapeHtml(moneyValue(row.cost, currency) + (row.unit ? ' / ' + row.unit : '')) + '</small>' : '') + '</div></li>';
+    }).join('');
+  }
+
+  function termsGrid(items) {
+    return items.filter(function (item) { return hasValue(item[1]) && item[1] !== false; }).map(function (item) {
+      var value = item[1] === true ? 'Si' : item[1];
+      var values = { full_full: 'Pieno / pieno', full_empty: 'Pieno / vuoto', same_level: 'Stesso livello', included: 'Incluso', minimum: 'Livello minimo', electric: 'Elettrico', custom: 'Personalizzata', unlimited: 'Illimitato', daily: 'Giornaliero', total: 'Totale', advance: 'Anticipato', pickup: 'Al ritiro', partial: 'Parziale', request: 'Su richiesta', preauthorization: 'Preautorizzazione', charge: 'Addebito', cash: 'Contanti', bank_transfer: 'Bonifico', other: 'Altra' };
+      if (typeof value === 'string' && values[value]) value = values[value];
+      return detailItem(item[0], value);
+    }).join('');
+  }
+
+  function optionPriceLabel(row, currency) {
+    if (row.price_mode === 'free') return 'Gratuito';
+    if (!hasValue(row.price_minor) && !hasValue(row.cost_minor)) return '';
+    var amount = formatMinorAmount(row.price_minor || row.cost_minor, row.currency || currency);
+    var modes = { per_day: ' / giorno', per_rental: ' / noleggio', per_unit: ' / unita', percentage: '%' };
+    if (row.price_mode === 'percentage') return String(row.cost || 0) + '%';
+    return amount + (modes[row.price_mode] || '');
+  }
+
+  function optionCard(row, kind, currency) {
+    var id = String(row.id || row.code || row.name || '').replace(/[^a-z0-9_-]+/gi, '-');
+    if (!id || !row.name) return '';
+    var mandatory = kind === 'extra' && !!row.mandatory;
+    var selected = mandatory || !!row.default_selected;
+    var min = Math.max(mandatory ? 1 : 0, Number(row.min_quantity) || 0);
+    var max = Math.max(1, Number(row.max_quantity) || 1, min);
+    var quantity = Math.max(selected ? 1 : 0, min);
+    return [
+      '<article class="gwr-rental-option" data-gwr-option data-gwr-option-kind="' + escapeHtml(kind) + '" data-gwr-price-minor="' + escapeHtml(row.price_minor || row.cost_minor || 0) + '" data-gwr-price-mode="' + escapeHtml(row.price_mode || 'per_rental') + '" data-gwr-percent="' + escapeHtml(row.cost || 0) + '" data-gwr-option-name="' + escapeHtml(row.name) + '">',
+      '<label><input type="checkbox" data-gwr-option-toggle value="' + escapeHtml(id) + '"' + (selected ? ' checked' : '') + (mandatory ? ' disabled aria-describedby="gwr-required-' + escapeHtml(id) + '"' : '') + ' /><span><strong>' + escapeHtml(row.name) + '</strong>' + (row.description ? '<small>' + escapeHtml(row.description) + '</small>' : '') + '</span><b>' + escapeHtml(optionPriceLabel(row, currency)) + '</b></label>',
+      mandatory ? '<span id="gwr-required-' + escapeHtml(id) + '" class="gwr-rental-option__required">Obbligatorio</span>' : '',
+      kind === 'extra' && max > 1 ? '<label class="gwr-rental-option__quantity"><span>Quantita</span><input type="number" min="' + min + '" max="' + max + '" value="' + quantity + '" data-gwr-option-quantity' + (selected ? '' : ' disabled') + ' /></label>' : '',
+      '</article>'
+    ].join('');
+  }
+
+  function faqMarkup(rows) {
+    return (rows || []).map(function (row) {
+      return row.question && row.answer ? '<details class="gwr-config-faq"><summary>' + escapeHtml(row.question) + '</summary><div>' + escapeHtml(plainText(row.answer)) + '</div></details>' : '';
+    }).join('');
+  }
+
+  function policyDescription(policy, fields) {
+    if (!policy) return '';
+    var copy = policy.description ? '<div class="gwr-config-copy">' + escapeHtml(policy.description) + '</div>' : '';
+    var grid = termsGrid(fields || []);
+    return (grid ? '<div class="gwr-config-grid">' + grid + '</div>' : '') + copy + (policy.conditions ? '<p class="gwr-config-note">' + escapeHtml(policy.conditions) + '</p>' : '') + (policy.notes ? '<p class="gwr-config-note">' + escapeHtml(policy.notes) + '</p>' : '');
+  }
+
+  function updateRentalSummary(modal) {
+    var summary = qs(modal, '[data-gwr-rental-summary]');
+    if (!summary) return;
+    var baseMinor = Number(summary.getAttribute('data-gwr-base-minor')) || 0;
+    var days = Number(summary.getAttribute('data-gwr-days')) || 0;
+    var currency = summary.getAttribute('data-gwr-currency') || 'EUR';
+    var optionTotal = 0;
+    var hasUncalculated = false;
+    var selected = [];
+
+    qsa(modal, '[data-gwr-option]').forEach(function (option) {
+      var toggle = qs(option, '[data-gwr-option-toggle]');
+      if (!toggle || !toggle.checked) return;
+      var quantityInput = qs(option, '[data-gwr-option-quantity]');
+      var quantity = quantityInput ? Math.max(Number(quantityInput.min) || 0, Math.min(Number(quantityInput.max) || 999, Number(quantityInput.value) || 0)) : 1;
+      var minor = Number(option.getAttribute('data-gwr-price-minor')) || 0;
+      var mode = option.getAttribute('data-gwr-price-mode') || 'per_rental';
+      var amount = minor * quantity;
+      if (mode === 'per_day') {
+        if (!days) hasUncalculated = true;
+        else amount *= days;
+      } else if (mode === 'percentage') {
+        if (!baseMinor) hasUncalculated = true;
+        else amount = Math.round(baseMinor * (Number(option.getAttribute('data-gwr-percent')) || 0) / 100) * quantity;
+      }
+      if ((mode !== 'per_day' || days) && (mode !== 'percentage' || baseMinor)) optionTotal += amount;
+      selected.push('<div><span>' + escapeHtml(option.getAttribute('data-gwr-option-name') || 'Opzione') + (quantity > 1 ? ' x' + quantity : '') + '</span><strong>' + escapeHtml(hasUncalculated && (mode === 'per_day' || mode === 'percentage') ? 'Da calcolare' : formatMinorAmount(amount, currency)) + '</strong></div>');
+    });
+
+    var optionsRow = qs(modal, '[data-gwr-options-row]');
+    var optionsTotal = qs(modal, '[data-gwr-options-total]');
+    if (optionsRow) optionsRow.hidden = !selected.length;
+    if (optionsTotal) optionsTotal.textContent = hasUncalculated ? formatMinorAmount(optionTotal, currency) + ' + opzioni variabili' : formatMinorAmount(optionTotal, currency);
+    var selectedBox = qs(modal, '[data-gwr-selected-options]');
+    if (selectedBox) {
+      selectedBox.hidden = !selected.length;
+      selectedBox.innerHTML = selected.join('');
+    }
+    var totalLabel = baseMinor ? formatMinorAmount(baseMinor + optionTotal, currency) + (hasUncalculated ? ' + variabili' : '') : (optionTotal ? 'Base su richiesta + ' + formatMinorAmount(optionTotal, currency) : 'Su richiesta');
+    qsa(modal, '[data-gwr-summary-total], [data-gwr-grand-total], [data-gwr-mobile-total]').forEach(function (node) { node.textContent = totalLabel; });
+  }
+
   function renderModalContent(vehicle, dates) {
     var cfg = catalogConfig();
     dates = dates || {};
@@ -348,6 +463,12 @@
     var featureList = (vehicle.features || []).filter(function (item, index, list) {
       return hasValue(item) && list.indexOf(item) === index;
     });
+    var rentalTerms = vehicle.rental_terms || {};
+    var extrasData = vehicle.extras || [];
+    var generalTerms = rentalTerms.general || {};
+    var currency = generalTerms.currency || 'EUR';
+    var days = rentalDays(dates);
+    var baseMinor = days && Number(vehicle.daily_price_amount) > 0 ? Math.round(Number(vehicle.daily_price_amount) * 100) * days : 0;
     var thumbs = images.map(function (image, index) {
       var imageAlt = title + ' - foto ' + (index + 1);
       return '<button type="button" data-gwr-gallery-index="' + index + '" data-gwr-image-url="' + escapeHtml(image.url) + '" data-gwr-image-alt="' + escapeHtml(imageAlt) + '"' + (index === 0 ? ' class="is-active" aria-current="true"' : '') + ' aria-label="Mostra foto ' + (index + 1) + ' di ' + images.length + '"><img src="' + escapeHtml(image.url) + '" alt="" loading="lazy" width="104" height="76" /></button>';
@@ -372,36 +493,46 @@
       detailItem('Anno', vehicle.year)
     ].join('');
 
-    var inclusions = [
-      vehicle.included_km_daily ? includedItem(valueWithUnit(vehicle.included_km_daily, 'km al giorno inclusi'), 'Il limite indicato deriva dalla scheda del veicolo.') : '',
-      vehicle.insurance_included ? includedItem('Assicurazione inclusa', 'Copertura indicata come inclusa nella scheda di noleggio.') : '',
-      vehicle.second_driver_included ? includedItem('Secondo conducente incluso', '') : ''
-    ].join('');
-
-    var coverage = [
-      vehicle.insurance_included ? detailItem('Copertura', 'Assicurazione inclusa', 'is-positive') : '',
-      detailItem('Franchigia indicata', vehicle.deductible)
-    ].join('');
-
-    var driverRequirements = [
-      detailItem('Eta minima', valueWithUnit(vehicle.min_driver_age, 'anni')),
-      detailItem('Patente posseduta da', valueWithUnit(vehicle.min_license_years, 'anni')),
-      detailItem('Patente richiesta', vehicle.required_license),
-      detailItem('Durata minima', valueWithUnit(vehicle.min_rental_days, 'giorni')),
-      detailItem('Durata massima', valueWithUnit(vehicle.max_rental_days, 'giorni'))
-    ].join('');
-
-    var mileage = [
-      detailItem('Limite giornaliero', valueWithUnit(vehicle.included_km_daily, 'km')),
-      detailItem('Limite settimanale', valueWithUnit(vehicle.included_km_weekly, 'km')),
-      detailItem('Limite mensile', valueWithUnit(vehicle.included_km_monthly, 'km')),
-      detailItem('Costo km eccedente', vehicle.extra_km_price)
-    ].join('');
-
-    var pickupDetails = [
-      detailItem('Sede veicolo', vehicle.location),
-      vehicle.home_delivery ? detailItem('Consegna', 'Consegna a domicilio disponibile') : ''
-    ].join('');
+    var inclusions = termsList(rentalTerms.included_services || [], false, currency);
+    var exclusions = termsList(rentalTerms.excluded_services || [], true, currency);
+    var coverages = rentalTerms.insurance_coverages || [];
+    var includedCoverages = coverages.filter(function (row) { return row.status === 'included'; });
+    var optionalCoverages = coverages.filter(function (row) { return row.status === 'optional'; });
+    var unavailableCoverages = coverages.filter(function (row) { return row.status === 'unavailable'; });
+    var coverage = includedCoverages.map(function (row) {
+      return detailItem(row.name, [row.description, row.maximum ? 'Massimale: ' + row.maximum : '', hasValue(row.excess) ? 'Franchigia: ' + moneyValue(row.excess, currency) : '', row.conditions, row.exclusions ? 'Esclusioni: ' + row.exclusions : ''].filter(Boolean).join(' \u00b7 '), 'is-positive');
+    }).join('') + unavailableCoverages.map(function (row) { return detailItem(row.name, 'Non disponibile', 'is-negative'); }).join('');
+    var optionalCoverageCards = optionalCoverages.map(function (row) { return optionCard(row, 'coverage', currency); }).join('');
+    var excesses = rentalTerms.excesses || {};
+    var excessMarkup = policyDescription(excesses, [
+      ['Danni', moneyValue(excesses.damage_amount, currency)], ['Danni (%)', excesses.damage_percent ? excesses.damage_percent + '%' : ''], ['Furto', moneyValue(excesses.theft_amount, currency)], ['Furto (%)', excesses.theft_percent ? excesses.theft_percent + '%' : ''], ['Incendio', moneyValue(excesses.fire_amount, currency)], ['Cristalli', moneyValue(excesses.glass_amount, currency)], ['Pneumatici', moneyValue(excesses.tyres_amount, currency)], ['Franchigia generica', moneyValue(excesses.generic_amount, currency)], ['Riduzione', moneyValue(excesses.reduction_amount, currency)]
+    ]);
+    var deposit = rentalTerms.security_deposit || {};
+    var depositMarkup = policyDescription(deposit, [
+      ['Importo', moneyValue(deposit.amount, deposit.currency || currency)], ['Modalita', deposit.method], ['Carta obbligatoria', deposit.card_required], ['Circuiti', deposit.card_networks], ['Carte di debito', deposit.debit_cards_allowed], ['Blocco', deposit.block_timing], ['Sblocco', deposit.release_timing]
+    ]);
+    var driver = rentalTerms.driver_requirements || {};
+    var driverRequirements = policyDescription(driver, [
+      ['Eta minima', valueWithUnit(driver.min_age, 'anni')], ['Eta massima', valueWithUnit(driver.max_age, 'anni')], ['Patente posseduta da', valueWithUnit(driver.min_license_years, 'anni')], ['Patente internazionale', driver.international_license], ['Patente UE', driver.eu_license], ['Supplemento giovane', driver.young_driver_surcharge], ['Supplemento senior', driver.senior_driver_surcharge], ['Costo supplemento', moneyValue(driver.surcharge_cost, currency)], ['Conducenti aggiuntivi', driver.additional_drivers], ['Numero massimo', driver.max_drivers]
+    ]);
+    var documents = termsList((rentalTerms.required_documents || []).map(function (row) {
+      var details = [row.required ? 'Obbligatorio' : '', row.at_pickup ? 'Al ritiro' : '', row.at_booking ? 'In fase di prenotazione' : '', row.private_customer ? 'Privati' : '', row.business_customer ? 'Aziende' : ''].filter(Boolean).join(' \u00b7 ');
+      return { title: row.name, description: [row.description, details].filter(Boolean).join(' - ') };
+    }), false, currency);
+    var fuel = rentalTerms.fuel_policy || {};
+    var fuelMarkup = policyDescription(fuel, [['Politica', fuel.type], ['Livello minimo', fuel.minimum_level], ['Ricarica minima', fuel.charge_percent ? fuel.charge_percent + '%' : ''], ['Carburante mancante', moneyValue(fuel.missing_fuel_cost, currency)], ['Servizio rifornimento', moneyValue(fuel.refuel_service_cost, currency)]]);
+    var mileagePolicy = rentalTerms.mileage_policy || {};
+    var mileage = policyDescription(mileagePolicy, [['Modalita', mileagePolicy.type], ['Km inclusi', mileagePolicy.included_km], ['Costo km eccedente', moneyValue(mileagePolicy.extra_km_cost, mileagePolicy.currency || currency)], ['Limiti territoriali', mileagePolicy.territorial_limits], ['Uso estero', mileagePolicy.foreign_use], ['Autostrada', mileagePolicy.motorway_use]]);
+    var payment = rentalTerms.payment_policy || {};
+    var paymentMarkup = policyDescription(payment, [['Pagamento', payment.type], ['Anticipo', payment.deposit_percent ? payment.deposit_percent + '%' : moneyValue(payment.deposit_amount, currency)], ['Saldo', payment.balance_timing], ['Metodi', payment.accepted_methods], ['Carta richiesta', payment.card_required], ['Bonifico', payment.bank_transfer], ['Contanti', payment.cash]]);
+    var cancellation = rentalTerms.cancellation_policy || {};
+    var cancellationMarkup = policyDescription(cancellation, [['Consentita', cancellation.allowed], ['Gratuita', cancellation.free], ['Limite ore', cancellation.hours_limit], ['Limite giorni', cancellation.days_limit], ['Penale fissa', moneyValue(cancellation.fixed_penalty, currency)], ['Penale percentuale', cancellation.percent_penalty ? cancellation.percent_penalty + '%' : ''], ['No-show', cancellation.no_show], ['Modifica date', cancellation.date_changes], ['Modifica veicolo', cancellation.vehicle_changes], ['Rimborso', cancellation.refund], ['Tempi rimborso', cancellation.refund_timing]]);
+    var pickupPolicy = rentalTerms.pickup_return_policy || {};
+    var pickupDetails = policyDescription(pickupPolicy, [['Sede', pickupPolicy.location_name || vehicle.location], ['Indirizzo', pickupPolicy.address], ['Ritiro', pickupPolicy.pickup_mode], ['Riconsegna', pickupPolicy.return_mode], ['Istruzioni', pickupPolicy.instructions], ['Su appuntamento', pickupPolicy.appointment_only], ['Fuori orario', pickupPolicy.after_hours_return], ['Costo fuori orario', moneyValue(pickupPolicy.after_hours_cost, currency)], ['Consegna a domicilio', pickupPolicy.home_delivery], ['Costo consegna', moneyValue(pickupPolicy.delivery_cost, currency)], ['Tolleranza ritardo', valueWithUnit(pickupPolicy.late_tolerance_minutes, 'minuti')], ['Costo ritardo', moneyValue(pickupPolicy.late_cost, currency)], ['Referente', pickupPolicy.contact_name], ['Telefono', pickupPolicy.phone], ['Email', pickupPolicy.email]]);
+    var territory = rentalTerms.territorial_policy || {};
+    var territoryMarkup = policyDescription(territory, [['Uso nazionale', territory.national_use], ['Uso estero', territory.foreign_use], ['Paesi consentiti', territory.allowed_countries], ['Paesi vietati', territory.forbidden_countries], ['Autorizzazione', territory.authorization_required], ['Costo autorizzazione', moneyValue(territory.authorization_cost, currency)], ['Traghetti', territory.ferries], ['Isole', territory.islands], ['Autostrada', territory.motorway], ['Strade sterrate', territory.unpaved_roads], ['Uso professionale', territory.professional_use], ['Uso sportivo', territory.sports_use], ['Traino', territory.towing], ['Subnoleggio', territory.sublease]]);
+    var extraCards = extrasData.map(function (row) { return optionCard(row, 'extra', currency); }).join('');
+    var faq = faqMarkup(rentalTerms.faq || []);
 
     var features = featureList.map(function (item, index) {
       return '<span class="gwr-config-feature' + (index >= 8 ? ' is-extra' : '') + '"' + (index >= 8 ? ' hidden' : '') + '>' + escapeHtml(item) + '</span>';
@@ -415,14 +546,23 @@
     }
     addSection('overview', 'Panoramica veicolo', overview ? '<div class="gwr-config-grid">' + overview + '</div>' : '', true);
     addSection('included', 'Incluso nel prezzo', inclusions ? '<ul class="gwr-config-included">' + inclusions + '</ul>' : '', true);
-    addSection('coverage', 'Coperture assicurative', coverage ? '<div class="gwr-config-grid">' + coverage + '</div>' + (vehicle.deductible ? '<p class="gwr-config-note">La franchigia e l\'importo indicato nelle condizioni del noleggio che puo restare a carico del cliente nei casi previsti.</p>' : '') : '', true);
-    addSection('deposit', 'Deposito cauzionale', vehicle.deposit ? '<div class="gwr-config-highlight"><span>Importo richiesto</span><strong>' + escapeHtml(vehicle.deposit) + '</strong><p>Modalita di blocco e rilascio da confermare con il concessionario.</p></div>' : '', true);
-    addSection('driver', 'Requisiti del conducente', driverRequirements ? '<div class="gwr-config-grid">' + driverRequirements + '</div>' : '', true);
-    addSection('mileage', 'Chilometraggio', mileage ? '<div class="gwr-config-grid">' + mileage + '</div>' : '', true);
-    addSection('pickup', 'Ritiro e riconsegna', pickupDetails ? '<div class="gwr-config-grid">' + pickupDetails + '</div>' : '', true);
+    addSection('excluded', 'Non incluso', exclusions ? '<ul class="gwr-config-included gwr-config-excluded">' + exclusions + '</ul>' : '', false);
+    addSection('coverage', 'Coperture assicurative', (coverage ? '<div class="gwr-config-grid">' + coverage + '</div>' : '') + (optionalCoverageCards ? '<div class="gwr-rental-options"><h4>Coperture opzionali</h4>' + optionalCoverageCards + '</div>' : ''), true);
+    addSection('excesses', 'Franchigie', excessMarkup, false);
+    addSection('deposit', 'Deposito cauzionale', depositMarkup, false);
+    addSection('driver', 'Requisiti del conducente', driverRequirements, true);
+    addSection('documents', 'Documenti richiesti', documents ? '<ul class="gwr-config-included">' + documents + '</ul>' : '', false);
+    addSection('fuel', 'Politica carburante', fuelMarkup, false);
+    addSection('mileage', 'Chilometraggio', mileage, true);
+    addSection('payment', 'Pagamento', paymentMarkup, false);
+    addSection('cancellation', 'Cancellazione e modifiche', cancellationMarkup, false);
+    addSection('pickup', 'Ritiro e riconsegna', pickupDetails, true);
+    addSection('territory', 'Territorio e utilizzo', territoryMarkup, false);
+    addSection('extras', 'Extra opzionali', extraCards ? '<div class="gwr-rental-options">' + extraCards + '</div><p class="gwr-config-note">Le quantita sono indicative e vengono confermate dal concessionario.</p>' : '', true);
+    addSection('faq', 'Domande frequenti', faq, false);
     addSection('features', 'Dotazioni', features ? '<div class="gwr-config-features">' + features + '</div>' : '', true);
     addSection('description', 'Descrizione del veicolo', vehicle.description ? '<div class="gwr-config-copy">' + escapeHtml(plainText(vehicle.description)) + '</div>' : '', true);
-    addSection('terms', 'Condizioni di noleggio', vehicle.rental_notes ? '<div class="gwr-config-copy">' + escapeHtml(plainText(vehicle.rental_notes)) + '</div>' : '', true);
+    addSection('terms', generalTerms.title || 'Condizioni di noleggio', (generalTerms.intro ? '<div class="gwr-config-copy">' + escapeHtml(generalTerms.intro) + '</div>' : '') + (generalTerms.general_note ? '<p class="gwr-config-note">' + escapeHtml(generalTerms.general_note) + '</p>' : '') + (vehicle.rental_notes ? '<div class="gwr-config-copy">' + escapeHtml(plainText(vehicle.rental_notes)) + '</div>' : '') + (generalTerms.updated_at ? '<p class="gwr-config-note">Aggiornate il ' + escapeHtml(isoToItalianDate(generalTerms.updated_at)) + '</p>' : '') + (generalTerms.terms_url ? '<p><a href="' + escapeHtml(safeHttpUrl(generalTerms.terms_url)) + '" target="_blank" rel="noopener noreferrer">Consulta le condizioni complete</a></p>' : ''), false);
 
     var sectionNav = sections.length > 3 ? '<nav class="gwr-config-nav" aria-label="Sezioni del dettaglio">' + sections.map(function (section) {
       return '<button type="button" data-gwr-scroll-section="gwr-config-' + escapeHtml(section.id) + '">' + escapeHtml(section.title) + '</button>';
@@ -439,22 +579,24 @@
     var secondaryContact = links.whatsapp && links.email ? '<a class="gwr-contact-action is-email" href="' + escapeHtml(links.email) + '">' + iconSvg('mail') + '<span>Email</span></a>' : '';
     var contactPanel = '<section class="gwr-config-contact"><h3>Contatta il concessionario</h3><p>' + escapeHtml(privacyNote) + '</p>' + primaryAction + secondaryContact + '</section>';
 
-    var priceRows = (vehicle.daily_price ? '<div><span>Tariffa giornaliera</span><strong>' + escapeHtml(vehicle.daily_price) + '</strong></div>' : '') + '<div><span>Totale</span><strong>Su richiesta</strong></div>';
-    var priceBreakdown = '<div class="gwr-config-price-detail"><button type="button" data-gwr-price-toggle aria-expanded="false" aria-controls="gwr-price-detail-content"><span>Dettaglio prezzo</span><i aria-hidden="true"></i></button><div id="gwr-price-detail-content" data-gwr-price-content hidden>' + priceRows + '<p>Il totale commerciale viene confermato dal concessionario e non e calcolato automaticamente dal plugin.</p></div></div>';
+    var taxLabel = generalTerms.taxes === 'included' ? 'Incluse' : (generalTerms.taxes === 'excluded' ? 'Escluse' : '');
+    var priceRows = (vehicle.daily_price ? '<div><span>Tariffa giornaliera</span><strong>' + escapeHtml(vehicle.daily_price) + '</strong></div>' : '') + '<div data-gwr-base-row' + (baseMinor ? '' : ' hidden') + '><span>Stima base</span><strong data-gwr-base-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : '') + '</strong></div><div data-gwr-options-row hidden><span>Coperture ed extra</span><strong data-gwr-options-total></strong></div>' + (taxLabel ? '<div><span>Tasse</span><strong>' + escapeHtml(taxLabel) + '</strong></div>' : '') + '<div><span>Stima totale</span><strong data-gwr-grand-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : 'Su richiesta') + '</strong></div>';
+    var priceBreakdown = '<div class="gwr-config-price-detail"><button type="button" data-gwr-price-toggle aria-expanded="false" aria-controls="gwr-price-detail-content"><span>Dettaglio prezzo</span><i aria-hidden="true"></i></button><div id="gwr-price-detail-content" data-gwr-price-content hidden>' + priceRows + '<p>La stima usa la tariffa giornaliera e gli optional selezionati. Il concessionario conferma sempre il totale commerciale.</p></div></div>';
     var summary = [
-      '<aside class="gwr-vehicle-configurator__summary" aria-label="Riepilogo richiesta">',
+      '<aside class="gwr-vehicle-configurator__summary" aria-label="Riepilogo richiesta" data-gwr-rental-summary data-gwr-base-minor="' + baseMinor + '" data-gwr-days="' + days + '" data-gwr-currency="' + escapeHtml(currency) + '">',
       '<span class="gwr-config-summary__eyebrow">Riepilogo noleggio</span>',
       bookingPoint('Ritiro', pickupLocation, dates.start_date, dates.pickup_time),
       bookingPoint('Riconsegna', returnLocation, dates.end_date, dates.return_time),
       '<div class="gwr-config-duration"><span>Durata</span><strong>' + escapeHtml(duration) + '</strong></div>',
-      '<div class="gwr-config-price" aria-live="polite"><span>Totale</span><strong>Su richiesta</strong>' + (vehicle.daily_price ? '<small>' + escapeHtml(vehicle.daily_price) + ' / giorno</small>' : '<small>Tariffa da confermare</small>') + '</div>',
+      '<div class="gwr-config-price" aria-live="polite" aria-atomic="true"><span>Stima totale</span><strong data-gwr-summary-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : 'Su richiesta') + '</strong>' + (vehicle.daily_price ? '<small>' + escapeHtml(vehicle.daily_price) + ' / giorno</small>' : '<small>Tariffa da confermare</small>') + '</div>',
+      '<div class="gwr-config-selected-options" data-gwr-selected-options hidden></div>',
       priceBreakdown,
       '<span class="gwr-config-availability">' + escapeHtml(availability) + '</span>',
       contactPanel,
       '</aside>'
     ].join('');
 
-    var mobileAction = '<div class="gwr-config-mobile-bar"><div><span>Totale</span><strong>Su richiesta</strong><small>' + escapeHtml(duration) + '</small></div>' + (primaryHref ? '<a href="' + escapeHtml(primaryHref) + '"' + primaryAttrs + ' data-gwr-primary-contact>Richiedi disponibilita</a>' : '<button type="button" disabled>Contatti non configurati</button>') + '</div>';
+    var mobileAction = '<div class="gwr-config-mobile-bar"><div><span>Stima totale</span><strong data-gwr-mobile-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : 'Su richiesta') + '</strong><small>' + escapeHtml(duration) + '</small></div>' + (primaryHref ? '<a href="' + escapeHtml(primaryHref) + '"' + primaryAttrs + ' data-gwr-primary-contact>Richiedi disponibilita</a>' : '<button type="button" disabled>Contatti non configurati</button>') + '</div>';
 
     return [
       '<div class="gwr-vehicle-configurator" data-gwr-configurator data-gwr-vehicle-id="' + escapeHtml(vehicle.id || '') + '">',
@@ -476,6 +618,40 @@
     ].join('');
   }
 
+  function loadVehicleDetails(vehicle) {
+    if (vehicle.rental_terms || !vehicle.id) return Promise.resolve(vehicle);
+    var cfg = catalogConfig();
+    var body = new URLSearchParams();
+    body.set('action', 'gwr_vehicle_detail');
+    body.set('nonce', cfg.nonce || '');
+    body.set('vehicle_id', vehicle.id);
+    return window.fetch(cfg.ajaxUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+      body: body.toString()
+    }).then(function (response) {
+      if (!response.ok) throw new Error('Vehicle detail request failed');
+      return response.json();
+    }).then(function (payload) {
+      if (!payload || !payload.success || !payload.data || !payload.data.vehicle) throw new Error('Invalid vehicle detail payload');
+      return payload.data.vehicle;
+    });
+  }
+
+  function prepareModalSections(modal) {
+    if (!window.matchMedia || !window.matchMedia('(max-width: 768px)').matches) return;
+    qsa(modal, '[data-gwr-config-section]').forEach(function (section, index) {
+      if (index < 2) return;
+      var toggle = qs(section, '[data-gwr-config-toggle]');
+      var sectionContent = qs(section, '[data-gwr-config-content]');
+      if (toggle && sectionContent) {
+        toggle.setAttribute('aria-expanded', 'false');
+        sectionContent.hidden = true;
+      }
+    });
+  }
+
   function openModalFromTrigger(trigger) {
     var catalog = trigger.closest('[data-gwr-catalog]') || document;
     var modal = qs(catalog, '[data-gwr-modal]') || qs(document, '[data-gwr-modal]');
@@ -485,7 +661,7 @@
     var vehicle = decodeVehiclePayload(trigger);
     var dates = formDataObject(qs(catalog, '[data-gwr-filter-form]'));
     lastModalTrigger = trigger;
-    content.innerHTML = renderModalContent(vehicle, dates);
+    content.innerHTML = '<div class="gwr-modal-loading" role="status"><span aria-hidden="true"></span><strong>Caricamento condizioni di noleggio...</strong></div>';
     content.scrollTop = 0;
     modal.hidden = false;
     modal.removeAttribute('hidden');
@@ -493,19 +669,19 @@
     modal.classList.add('is-open');
     document.documentElement.classList.add('gwr-modal-open');
     document.body.classList.add('gwr-modal-open');
-    if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
-      qsa(modal, '[data-gwr-config-section]').forEach(function (section, index) {
-        if (index < 2) return;
-        var toggle = qs(section, '[data-gwr-config-toggle]');
-        var sectionContent = qs(section, '[data-gwr-config-content]');
-        if (toggle && sectionContent) {
-          toggle.setAttribute('aria-expanded', 'false');
-          sectionContent.hidden = true;
-        }
-      });
-    }
     var closeButton = qs(modal, '.gwr-modal__close');
     if (closeButton) closeButton.focus();
+    loadVehicleDetails(vehicle).then(function (fullVehicle) {
+      if (!modal.classList.contains('is-open')) return;
+      content.innerHTML = renderModalContent(fullVehicle, dates);
+      content.scrollTop = 0;
+      prepareModalSections(modal);
+      updateRentalSummary(modal);
+    }).catch(function (error) {
+      console.error('Gest Web Rent detail error:', error);
+      if (!modal.classList.contains('is-open')) return;
+      content.innerHTML = '<div class="gwr-modal-load-error" role="alert"><strong>Dettagli temporaneamente non disponibili</strong><p>Chiudi la finestra e riprova tra qualche istante.</p></div>';
+    });
   }
 
   function closeModal(modal) {
@@ -978,6 +1154,14 @@
     if (event.target.closest('[data-gwr-gallery-next]')) { setGalleryImage(modal, active + 1); return; }
     var thumb = event.target.closest('[data-gwr-gallery-index]');
     if (thumb) { setGalleryImage(modal, Number(thumb.getAttribute('data-gwr-gallery-index'))); return; }
+    var optionToggle = event.target.closest('[data-gwr-option-toggle]');
+    if (optionToggle) {
+      var option = optionToggle.closest('[data-gwr-option]');
+      var quantity = option ? qs(option, '[data-gwr-option-quantity]') : null;
+      if (quantity) quantity.disabled = !optionToggle.checked;
+      updateRentalSummary(modal);
+      return;
+    }
     var configToggle = event.target.closest('[data-gwr-config-toggle]');
     if (configToggle) {
       var configContent = document.getElementById(configToggle.getAttribute('aria-controls'));
@@ -1017,6 +1201,12 @@
       }
     }
   }, true);
+
+  document.addEventListener('change', function (event) {
+    if (!event.target.matches('[data-gwr-option-quantity]')) return;
+    var modal = event.target.closest('[data-gwr-modal]');
+    if (modal) updateRentalSummary(modal);
+  });
 
   document.addEventListener('touchstart', function (event) {
     var frame = event.target.closest ? event.target.closest('.gwr-modal-gallery-frame') : null;

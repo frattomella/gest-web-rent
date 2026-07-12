@@ -18,7 +18,9 @@ class GWR_Core {
 	 */
 	public function boot() {
 		GWR_CPT::init();
+		GWR_Rental_Terms::maybe_initialize();
 		GWR_Admin::init();
+		GWR_Rental_Terms_Admin::init();
 		GWR_Frontend::init();
 		GWR_Blocks::init();
 
@@ -51,6 +53,12 @@ class GWR_Core {
 
 		if ( false === get_option( GWR_Admin::OPTION_NAME, false ) ) {
 			add_option( GWR_Admin::OPTION_NAME, GWR_Admin::default_settings(), '', false );
+		}
+		if ( false === get_option( GWR_Rental_Terms::GLOBAL_OPTION, false ) ) {
+			add_option( GWR_Rental_Terms::GLOBAL_OPTION, GWR_Rental_Terms::defaults(), '', false );
+		}
+		if ( false === get_option( GWR_Rental_Terms::VEHICLE_OPTION, false ) ) {
+			add_option( GWR_Rental_Terms::VEHICLE_OPTION, array(), '', false );
 		}
 
 		flush_rewrite_rules();

@@ -1163,6 +1163,59 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 .gwr-config-included strong { color: var(--gwr-ink); font-size: .84rem; }
 .gwr-config-included p { margin: 0; color: var(--gwr-muted); font-size: .75rem; line-height: 1.45; }
 
+.gwr-config-included li.is-excluded > span { color: #b42318; background: #fee4e2; }
+
+.gwr-rental-options { display: grid; gap: 12px; margin-top: 16px; }
+.gwr-rental-options h4 { margin: 0 0 2px; color: var(--gwr-ink); font-size: 15px; }
+.gwr-rental-option { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--gwr-border); border-radius: 18px; background: #fff; transition: border-color .2s ease, box-shadow .2s ease; }
+.gwr-rental-option:has([data-gwr-option-toggle]:checked) { border-color: color-mix(in srgb, var(--gwr-primary) 55%, #d7def0); box-shadow: 0 10px 24px rgba(15, 23, 42, .07); }
+.gwr-rental-option > label:first-child { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; cursor: pointer; }
+.gwr-rental-option input[type="checkbox"] { width: 20px; height: 20px; margin: 0; accent-color: var(--gwr-primary); }
+.gwr-rental-option label span { display: grid; gap: 3px; }
+.gwr-rental-option label small,
+.gwr-rental-option__required { color: var(--gwr-muted); font-size: 12px; line-height: 1.45; }
+.gwr-rental-option label b { color: var(--gwr-primary-strong); font-size: 13px; white-space: nowrap; }
+.gwr-rental-option__required { width: fit-content; padding: 4px 8px; border-radius: 999px; background: #e8f7ef; color: #087443; font-weight: 750; }
+.gwr-rental-option__quantity { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.gwr-rental-option__quantity input { width: 76px; min-height: 38px; padding: 6px 9px; border: 1px solid var(--gwr-border); border-radius: 11px; background: #fff; }
+
+.gwr-config-selected-options { display: grid; gap: 7px; padding: 12px; border: 1px solid var(--gwr-border); border-radius: 14px; background: #f8faff; }
+.gwr-config-selected-options[hidden] { display: none; }
+.gwr-config-selected-options > div { display: flex; justify-content: space-between; gap: 12px; color: var(--gwr-muted); font-size: 12px; }
+.gwr-config-selected-options strong { color: var(--gwr-ink); text-align: right; }
+
+.gwr-config-faq { padding: 13px 0; border-bottom: 1px solid var(--gwr-border); }
+.gwr-config-faq:first-child { padding-top: 0; }
+.gwr-config-faq:last-child { padding-bottom: 0; border-bottom: 0; }
+.gwr-config-faq summary { color: var(--gwr-ink); font-weight: 750; cursor: pointer; }
+.gwr-config-faq div { padding-top: 10px; color: var(--gwr-muted); line-height: 1.65; }
+
+.gwr-modal-loading,
+.gwr-modal-load-error {
+  min-height: 360px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 32px;
+  color: var(--gwr-muted);
+  text-align: center;
+}
+
+.gwr-modal-loading span {
+  width: 34px;
+  height: 34px;
+  border: 3px solid #dbe4f5;
+  border-top-color: var(--gwr-primary);
+  border-radius: 50%;
+  animation: gwr-modal-spin .8s linear infinite;
+}
+
+.gwr-modal-load-error strong { color: var(--gwr-ink); font-size: 18px; }
+.gwr-modal-load-error p { margin: 0; }
+
+@keyframes gwr-modal-spin { to { transform: rotate(360deg); } }
+
 .gwr-config-note,
 .gwr-config-highlight p {
   margin: 10px 0 0;
@@ -1617,6 +1670,15 @@ body.gwr-modal-open {
   .gwr-category-shortcut {
     flex-basis: 154px;
   }
+
+  .gwr-rental-option > label:first-child {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .gwr-rental-option label b {
+    grid-column: 2;
+    white-space: normal;
+  }
 }
 
 @media (max-width: 420px) {
@@ -1635,5 +1697,6 @@ body.gwr-modal-open {
 
 @media (prefers-reduced-motion: reduce) {
   .gwr-vehicle-card--skeleton i { animation: none; }
+  .gwr-modal-loading span { animation: none; }
   .gwr-vehicle-card, .gwr-category-shortcut, .gwr-sidebar-section__toggle > span:last-child, .gwr-config-section h3 i, .gwr-config-price-detail button i { transition: none; }
 }

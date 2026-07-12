@@ -75,6 +75,7 @@ class GWR_Admin {
 		add_submenu_page( 'gest-web-rent', __( 'Veicoli', 'gest-web-rent' ), __( 'Veicoli', 'gest-web-rent' ), 'manage_options', 'gwr-vehicles', array( __CLASS__, 'vehicles_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Aggiungi veicolo', 'gest-web-rent' ), __( 'Aggiungi veicolo', 'gest-web-rent' ), 'manage_options', 'gwr-vehicle-edit', array( __CLASS__, 'vehicle_edit_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Disponibilita', 'gest-web-rent' ), __( 'Disponibilita', 'gest-web-rent' ), 'manage_options', 'gwr-availability', array( __CLASS__, 'availability_page' ) );
+		add_submenu_page( 'gest-web-rent', __( 'Condizioni di noleggio', 'gest-web-rent' ), __( 'Condizioni di noleggio', 'gest-web-rent' ), 'manage_options', 'gwr-rental-terms', array( 'GWR_Rental_Terms_Admin', 'page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Impostazioni', 'gest-web-rent' ), __( 'Impostazioni', 'gest-web-rent' ), 'manage_options', 'gwr-settings', array( __CLASS__, 'settings_page' ) );
 	}
 
@@ -103,6 +104,10 @@ class GWR_Admin {
 				'cover' => __( 'Copertina', 'gest-web-rent' ),
 				'moveUp' => __( 'Su', 'gest-web-rent' ),
 				'moveDown' => __( 'Giu', 'gest-web-rent' ),
+				'confirmRemove' => __( 'Eliminare questa voce?', 'gest-web-rent' ),
+				'newRow' => __( 'Nuova voce', 'gest-web-rent' ),
+				'global' => __( 'Globale', 'gest-web-rent' ),
+				'custom' => __( 'Personalizzato', 'gest-web-rent' ),
 			)
 		);
 	}
@@ -297,6 +302,7 @@ class GWR_Admin {
 		wp_nonce_field( 'gwr_save_vehicle', 'gwr_vehicle_nonce' );
 
 		self::vehicle_form_sections( $vehicle );
+		GWR_Rental_Terms_Admin::render_vehicle_overrides( $vehicle_id );
 		self::vehicle_images_section( $vehicle_id );
 		self::vehicle_availability_section( $vehicle_id );
 
@@ -384,6 +390,7 @@ class GWR_Admin {
 
 		$availability = isset( $_POST['gwr_availability'] ) && is_array( $_POST['gwr_availability'] ) ? wp_unslash( $_POST['gwr_availability'] ) : array();
 		GWR_CPT::save_availability_rows( $result, $availability );
+		GWR_Rental_Terms::save_vehicle_override( $result, $_POST['gwr_vehicle_terms'] ?? array() );
 
 		self::redirect_with_message( self::vehicle_edit_url( $result ), 'updated', __( 'Veicolo salvato.', 'gest-web-rent' ) );
 	}
@@ -398,6 +405,7 @@ class GWR_Admin {
 		$vehicle_id = isset( $_GET['vehicle_id'] ) ? absint( $_GET['vehicle_id'] ) : 0;
 		check_admin_referer( 'gwr_delete_vehicle_' . $vehicle_id );
 		GWR_CPT::delete_vehicle( $vehicle_id );
+		GWR_Rental_Terms::delete_vehicle_override( $vehicle_id );
 		self::redirect_with_message( self::vehicles_url(), 'updated', __( 'Veicolo eliminato.', 'gest-web-rent' ) );
 	}
 
@@ -411,6 +419,7 @@ class GWR_Admin {
 		$vehicle_id = isset( $_GET['vehicle_id'] ) ? absint( $_GET['vehicle_id'] ) : 0;
 		check_admin_referer( 'gwr_duplicate_vehicle_' . $vehicle_id );
 		$new_id = GWR_CPT::duplicate_vehicle( $vehicle_id );
+		GWR_Rental_Terms::duplicate_vehicle_override( $vehicle_id, $new_id );
 		self::redirect_with_message( self::vehicle_edit_url( $new_id ), 'updated', __( 'Veicolo duplicato in bozza.', 'gest-web-rent' ) );
 	}
 
@@ -664,7 +673,7 @@ class GWR_Admin {
 	 * @param array  $actions Actions.
 	 * @return void
 	 */
-	private static function page_start( $current, $title, $description, $actions = array() ) {
+	public static function page_start( $current, $title, $description, $actions = array() ) {
 		echo '<div class="wrap gwr-admin-wrap"><div class="gwr-admin-shell">';
 		self::nav( $current );
 		echo '<section class="gwr-admin-stage"><header class="gwr-page-header"><div class="gwr-page-header__copy"><h1>' . esc_html( $title ) . '</h1><p>' . esc_html( $description ) . '</p><div class="gwr-page-badges"><span class="gwr-page-badge">v' . esc_html( GWR_VERSION ) . '</span><span class="gwr-page-badge">' . esc_html__( 'Catalogo unico', 'gest-web-rent' ) . '</span></div></div>';
@@ -684,7 +693,7 @@ class GWR_Admin {
 	 *
 	 * @return void
 	 */
-	private static function page_end() {
+	public static function page_end() {
 		echo '</section></div></div>';
 	}
 
@@ -700,6 +709,7 @@ class GWR_Admin {
 			'vehicles'     => array( 'label' => __( 'Veicoli', 'gest-web-rent' ), 'url' => self::vehicles_url() ),
 			'add'          => array( 'label' => __( 'Aggiungi veicolo', 'gest-web-rent' ), 'url' => self::vehicle_edit_url() ),
 			'availability' => array( 'label' => __( 'Disponibilita', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-availability' ) ),
+			'terms'        => array( 'label' => __( 'Condizioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-rental-terms' ) ),
 			'settings'     => array( 'label' => __( 'Impostazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-settings' ) ),
 		);
 

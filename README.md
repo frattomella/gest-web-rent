@@ -47,6 +47,7 @@ Sottomenu:
 - Veicoli
 - Aggiungi veicolo
 - Disponibilita
+- Condizioni di noleggio
 - Impostazioni
 
 La dashboard mostra riepilogo veicoli, veicoli attivi, veicoli in evidenza, blocchi futuri, stato WhatsApp/email e shortcode catalogo.
@@ -69,6 +70,14 @@ Il form custom include:
 - indisponibilita.
 
 I veicoli sono salvati nella tabella custom `wp_gwr_vehicles`, non come post WordPress.
+
+## Condizioni Di Noleggio
+
+Vai in **Gest Web Rent > Condizioni di noleggio** per configurare i valori globali di servizi inclusi ed esclusi, coperture, franchigie, deposito, conducente, documenti, carburante, chilometraggio, pagamento, cancellazione, ritiro, territorio, extra e FAQ.
+
+Nel form di modifica del veicolo la sezione **Condizioni di noleggio** permette di ereditare ogni gruppo globale oppure conservarne una versione personalizzata. Gli extra possono essere associati a tutti i veicoli, a specifici ID o a categorie veicolo.
+
+Le quantita degli extra sono informative: il controllo della disponibilita reale richiedera il futuro modulo prenotazioni e non viene simulato in questa versione.
 
 ## Foto Veicolo
 
@@ -167,5 +176,5 @@ Ogni release deve aggiornare:
 Release corrente:
 
 ```text
-1.1.4
+1.5.0
 ```

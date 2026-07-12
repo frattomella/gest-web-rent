@@ -969,15 +969,16 @@ class GWR_CPT {
 	 * Public vehicle payload for modal.
 	 *
 	 * @param array $vehicle Vehicle row.
+	 * @param bool  $extended Include commercial terms used only by the modal.
 	 * @return array
 	 */
-	public static function public_payload( $vehicle ) {
+	public static function public_payload( $vehicle, $extended = true ) {
 		$features = array();
 		foreach ( self::vehicle_features( $vehicle ) as $feature ) {
 			$features[] = self::feature_options()[ $feature ];
 		}
 
-		return array(
+		$payload = array(
 			'id'                     => absint( $vehicle['id'] ),
 			'title'                  => $vehicle['title'],
 			'brand'                  => $vehicle['brand'],
@@ -1014,7 +1015,13 @@ class GWR_CPT {
 			'features'               => $features,
 			'featured'               => ! empty( $vehicle['featured'] ),
 			'images'                 => self::get_vehicle_image_data( $vehicle['id'] ),
+			'daily_price_amount'     => null === $vehicle['daily_price'] || '' === $vehicle['daily_price'] ? null : (float) $vehicle['daily_price'],
 		);
+		if ( $extended && class_exists( 'GWR_Rental_Terms' ) ) {
+			$payload = array_merge( $payload, GWR_Rental_Terms::public_payload( absint( $vehicle['id'] ), $vehicle ) );
+		}
+
+		return $payload;
 	}
 
 	/**

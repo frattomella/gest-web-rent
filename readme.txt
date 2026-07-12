@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,6 +18,8 @@ Funzionalita principali:
 
 * Dashboard amministrativa in stile GestPark Online.
 * Gestione veicoli tramite form custom.
+* Condizioni di noleggio globali con override per singolo veicolo.
+* Coperture, franchigie, deposito, requisiti, documenti, politiche, extra e FAQ configurabili.
 * Foto veicolo tramite Media Library.
 * Indisponibilita per date in tabella custom.
 * Catalogo frontend responsive con griglia a 2 colonne desktop.
@@ -59,6 +61,14 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 1.5.0 =
+* Aggiunta area amministrativa Condizioni di noleggio con navigazione a sezioni.
+* Aggiunti termini globali e override indipendenti per singolo veicolo.
+* Aggiunti repeater validati per servizi, coperture, documenti, extra e FAQ.
+* Collegati i dati commerciali reali al configuratore con caricamento dettaglio on demand.
+* Aggiunta selezione locale di coperture ed extra con riepilogo prezzi accessibile.
+* Nessuna nuova tabella: migrazione idempotente tramite opzioni WordPress non autoload.
 
 = 1.4.0 =
 * Sostituito il vecchio dettaglio con un configuratore veicolo quasi fullscreen.
