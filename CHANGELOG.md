@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0
+
+- Sostituito il vecchio popup con un configuratore veicolo quasi fullscreen e responsive.
+- Aggiunti header, gallery, indice sezioni, riepilogo noleggio sticky e CTA mobile.
+- Le sezioni commerciali vengono mostrate esclusivamente quando alimentate da dati reali.
+- Migliorate navigazione gallery, swipe, tastiera, accordion, focus trap e ritorno del focus.
+- Aggiunto supporto agli offset della barra admin WordPress desktop e mobile.
+- Arricchiti WhatsApp ed email con date, orari, sedi, tariffa e link della pagina.
+
 ## 1.3.0
 
 - Ridisegnato il catalogo con sidebar desktop e pannello filtri responsive condiviso.
