@@ -197,5 +197,5 @@ Ogni release deve aggiornare:
 Release corrente:
 
 ```text
-1.9.0
+1.9.1
 ```

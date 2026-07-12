@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.1
+
+- Corretto il bug bloccante che mostrava il fallback generico al posto del dettaglio veicolo.
+- Sostituito il payload Base64 nelle card con il riferimento canonico `data-gwr-vehicle-id` per risultati iniziali, filtrati e ordinati.
+- Centralizzato il payload pubblico del configuratore con disponibilita e preventivo server; gli errori secondari di prezzo non bloccano il veicolo.
+- Aggiunti loading accessibile, errori classificati, retry, cache contestuale per periodo e annullamento delle richieste concorrenti.
+- Migliorati focus, attributi ARIA, ripristino del trigger e protezione da risposte obsolete.
+- Rifinita la UI/UX del modal con larghezza desktop controllata, galleria proporzionata, stati chiari e layout mobile fino a 320 px.
+- Eseguiti test mirati su payload parziali, immagini mancanti, cache, risposta non JSON, sintassi PHP/JavaScript e packaging WordPress.
+
 ## 1.9.0
 
 - Completata l'area cliente `[gwr_booking_portal]` con accesso tramite codice e token casuale a 32 byte, hash HMAC nel database, scadenza configurabile, revoca e rotazione.

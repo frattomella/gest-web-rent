@@ -9,6 +9,17 @@
   var galleryTouchModal = null;
   var lastContactActivation = 0;
   var activeBookingContext = null;
+  var vehicleDetailsCache = new Map();
+  var activeVehicleRequest = null;
+  var vehicleRequestSequence = 0;
+  var activeVehicleRequestContext = null;
+
+  function debugLog() {
+    if (window.gwrDebug !== true || !window.console || typeof window.console.debug !== 'function') return;
+    var args = Array.prototype.slice.call(arguments);
+    args.unshift('[GWR]');
+    window.console.debug.apply(window.console, args);
+  }
 
   function validDateParts(year, month, day) {
     var date = new Date(Date.UTC(year, month - 1, day));
@@ -194,13 +205,40 @@
     return true;
   }
 
-  function decodeVehiclePayload(trigger) {
-    var payloadNode = trigger.hasAttribute('data-gwr-vehicle-b64') ? trigger : trigger.closest('[data-gwr-vehicle-b64]');
-    var b64 = payloadNode ? payloadNode.getAttribute('data-gwr-vehicle-b64') : '';
-    if (b64) { return JSON.parse(window.atob(b64)); }
-    var raw = payloadNode ? payloadNode.getAttribute('data-gwr-vehicle') : '';
-    if (raw) { return JSON.parse(raw); }
-    throw new Error('Missing vehicle payload');
+  function vehicleIdFromTrigger(trigger) {
+    var source = trigger && trigger.closest ? trigger.closest('[data-gwr-vehicle-id]') : null;
+    var vehicleId = Number(source ? source.getAttribute('data-gwr-vehicle-id') : 0);
+    return Number.isInteger(vehicleId) && vehicleId > 0 ? vehicleId : 0;
+  }
+
+  function normalizeVehicleDetails(payload) {
+    var response = payload && payload.vehicle ? payload : { vehicle: payload || {} };
+    var source = response.vehicle || {};
+    var vehicle = Object.assign({}, source, {
+      id: Number(source.id || source.vehicle_id || 0),
+      title: source.title || source.vehicle_title || '',
+      brand: source.brand || source.make || source.marca || '',
+      model: source.model || source.modello || '',
+      daily_price: source.daily_price || source.price_per_day || '',
+      daily_price_amount: source.daily_price_amount === null || source.daily_price_amount === undefined || source.daily_price_amount === '' ? null : Number(source.daily_price_amount),
+      images: Array.isArray(source.images) ? source.images : (Array.isArray(source.gallery) ? source.gallery : []),
+      features: Array.isArray(source.features) ? source.features : [],
+      rental_terms: source.rental_terms && typeof source.rental_terms === 'object' ? source.rental_terms : (response.rental_terms || {}),
+      extras: Array.isArray(source.extras) ? source.extras : (Array.isArray(response.extras) ? response.extras : []),
+      pricing: source.pricing && typeof source.pricing === 'object' ? source.pricing : (response.pricing || {}),
+      availability: source.availability && typeof source.availability === 'object' ? source.availability : (response.availability || {})
+    });
+    if (!Number.isFinite(vehicle.daily_price_amount)) vehicle.daily_price_amount = null;
+    return vehicle;
+  }
+
+  function vehicleDetailCacheKey(vehicleId, dates) {
+    var context = dates || {};
+    return [vehicleId, context.start_date || '', context.pickup_time || '', context.end_date || '', context.return_time || '', context.pickup_location || '', context.return_location || '', context.different_return || '', context.coupon || context.coupon_code || ''].join('|');
+  }
+
+  function clearVehicleDetailsCache() {
+    vehicleDetailsCache.clear();
   }
 
   function replaceTokens(template, vehicle, dates) {
@@ -766,9 +804,13 @@
     refreshPaymentStatus(panel);
   }
 
-  function renderModalContent(vehicle, dates) {
+  function renderModalContent(vehicle, dates, modal) {
     var cfg = catalogConfig();
     dates = dates || {};
+    vehicle = normalizeVehicleDetails(vehicle);
+    if (!vehicle.id) throw new Error('invalid_vehicle_payload');
+    var modalTitleId = modal ? (modal.getAttribute('data-gwr-modal-title-id') || 'gwr-modal-title') : 'gwr-modal-title';
+    var modalDescriptionId = modal ? (modal.getAttribute('data-gwr-modal-description-id') || 'gwr-modal-description') : 'gwr-modal-description';
     var images = uniqueImages(vehicle.images).map(function (image) {
       return { url: safeHttpUrl(image.url), id: image.id || 0 };
     }).filter(function (image) { return image.url; });
@@ -780,16 +822,21 @@
     var returnLocation = dates.different_return === '1' && dates.return_location ? dates.return_location : pickupLocation;
     var duration = rentalDurationLabel(dates).replace(/^Durata:\s*/, '') || 'Da definire';
     var hasPeriod = !!(dates.start_date && dates.end_date);
-    var availability = hasPeriod ? 'Disponibile salvo conferma' : 'Disponibilita da verificare';
+    var availabilityState = vehicle.availability || {};
+    var availability = availabilityState.checked
+      ? (availabilityState.available ? 'Disponibile nel periodo selezionato' : 'Non disponibile nel periodo selezionato')
+      : (hasPeriod ? 'Disponibile salvo conferma' : 'Disponibilita da verificare');
     var featureList = (vehicle.features || []).filter(function (item, index, list) {
       return hasValue(item) && list.indexOf(item) === index;
     });
     var rentalTerms = vehicle.rental_terms || {};
     var extrasData = vehicle.extras || [];
     var generalTerms = rentalTerms.general || {};
-    var currency = generalTerms.currency || 'EUR';
+    var pricing = vehicle.pricing || {};
+    var currency = pricing.currency || generalTerms.currency || 'EUR';
     var days = rentalDays(dates);
-    var baseMinor = days && Number(vehicle.daily_price_amount) > 0 ? Math.round(Number(vehicle.daily_price_amount) * 100) * days : 0;
+    var serverTotalMinor = pricing.status === 'available' && Number(pricing.grand_total_minor) > 0 ? Number(pricing.grand_total_minor) : 0;
+    var baseMinor = serverTotalMinor || (days && Number(vehicle.daily_price_amount) > 0 ? Math.round(Number(vehicle.daily_price_amount) * 100) * days : 0);
     var thumbs = images.map(function (image, index) {
       var imageAlt = title + ' - foto ' + (index + 1);
       return '<button type="button" data-gwr-gallery-index="' + index + '" data-gwr-image-url="' + escapeHtml(image.url) + '" data-gwr-image-alt="' + escapeHtml(imageAlt) + '"' + (index === 0 ? ' class="is-active" aria-current="true"' : '') + ' aria-label="Mostra foto ' + (index + 1) + ' di ' + images.length + '"><img src="' + escapeHtml(image.url) + '" alt="" loading="lazy" width="104" height="76" /></button>';
@@ -896,13 +943,15 @@
     var primaryHref = links.whatsapp || links.email || '';
     var primaryChannel = links.whatsapp ? 'WhatsApp' : (links.email ? 'Email' : '');
     var primaryAttrs = links.whatsapp ? ' target="_blank" rel="noopener noreferrer"' : '';
-    var canBook = !!(dates.start_date && dates.end_date && dates.pickup_time && dates.return_time && vehicle.daily_price_amount);
-    var bookingAction = canBook ? '<button type="button" class="gwr-config-primary-action" data-gwr-start-booking><span>Prenota il veicolo</span><small>richiesta senza pagamento</small></button>' : '<button type="button" class="gwr-config-primary-action" disabled><span>Completa date e tariffa</span><small>necessarie per prenotare</small></button>';
+    var canBook = !!(dates.start_date && dates.end_date && dates.pickup_time && dates.return_time && vehicle.daily_price_amount && availabilityState.available !== false);
+    var unavailableAction = availabilityState.available === false ? '<button type="button" class="gwr-config-primary-action" disabled><span>Veicolo non disponibile</span><small>modifica il periodo di noleggio</small></button>' : '';
+    var bookingAction = canBook ? '<button type="button" class="gwr-config-primary-action" data-gwr-start-booking><span>Prenota il veicolo</span><small>richiesta senza pagamento</small></button>' : (unavailableAction || '<button type="button" class="gwr-config-primary-action" disabled><span>Completa date e tariffa</span><small>necessarie per prenotare</small></button>');
     var contactActions = (links.whatsapp ? '<a class="gwr-contact-action is-whatsapp" href="' + escapeHtml(links.whatsapp) + '" target="_blank" rel="noopener noreferrer" data-gwr-primary-contact>' + iconSvg('whatsapp') + '<span>WhatsApp</span></a>' : '') + (links.email ? '<a class="gwr-contact-action is-email" href="' + escapeHtml(links.email) + '">' + iconSvg('mail') + '<span>Email</span></a>' : '');
     var contactPanel = '<section class="gwr-config-contact"><h3>Prenotazione e contatti</h3><p>' + escapeHtml(privacyNote) + '</p>' + bookingAction + (contactActions ? '<div class="gwr-modal-contact__actions">' + contactActions + '</div>' : '') + '</section>';
 
     var taxLabel = generalTerms.taxes === 'included' ? 'Incluse' : (generalTerms.taxes === 'excluded' ? 'Escluse' : '');
-    var priceRows = (vehicle.daily_price ? '<div><span>Tariffa giornaliera</span><strong>' + escapeHtml(vehicle.daily_price) + '</strong></div>' : '') + '<div data-gwr-base-row' + (baseMinor ? '' : ' hidden') + '><span>Stima base</span><strong data-gwr-base-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : '') + '</strong></div><div data-gwr-options-row hidden><span>Coperture ed extra</span><strong data-gwr-options-total></strong></div>' + (taxLabel ? '<div><span>Tasse</span><strong>' + escapeHtml(taxLabel) + '</strong></div>' : '') + '<div><span>Stima totale</span><strong data-gwr-grand-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : 'Su richiesta') + '</strong></div>';
+    var displayedTotal = pricing.grand_total_label || (baseMinor ? formatMinorAmount(baseMinor, currency) : 'Su richiesta');
+    var priceRows = (vehicle.daily_price ? '<div><span>Tariffa giornaliera</span><strong>' + escapeHtml(vehicle.daily_price) + '</strong></div>' : '') + '<div data-gwr-base-row' + (baseMinor ? '' : ' hidden') + '><span>Stima base</span><strong data-gwr-base-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : '') + '</strong></div><div data-gwr-options-row hidden><span>Coperture ed extra</span><strong data-gwr-options-total></strong></div>' + (taxLabel ? '<div><span>Tasse</span><strong>' + escapeHtml(taxLabel) + '</strong></div>' : '') + '<div><span>Stima totale</span><strong data-gwr-grand-total>' + escapeHtml(displayedTotal) + '</strong></div>';
     var priceBreakdown = '<div class="gwr-config-price-detail"><button type="button" data-gwr-price-toggle aria-expanded="false" aria-controls="gwr-price-detail-content"><span>Dettaglio prezzo</span><i aria-hidden="true"></i></button><div id="gwr-price-detail-content" data-gwr-price-content hidden>' + priceRows + '<p>La stima usa la tariffa giornaliera e gli optional selezionati. Il concessionario conferma sempre il totale commerciale.</p></div></div>';
     var summary = [
       '<aside class="gwr-vehicle-configurator__summary" aria-label="Riepilogo richiesta" data-gwr-rental-summary data-gwr-base-minor="' + baseMinor + '" data-gwr-days="' + days + '" data-gwr-currency="' + escapeHtml(currency) + '">',
@@ -910,7 +959,7 @@
       bookingPoint('Ritiro', pickupLocation, dates.start_date, dates.pickup_time),
       bookingPoint('Riconsegna', returnLocation, dates.end_date, dates.return_time),
       '<div class="gwr-config-duration"><span>Durata</span><strong>' + escapeHtml(duration) + '</strong></div>',
-      '<div class="gwr-config-price" aria-live="polite" aria-atomic="true"><span>Stima totale</span><strong data-gwr-summary-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : 'Su richiesta') + '</strong>' + (vehicle.daily_price ? '<small>' + escapeHtml(vehicle.daily_price) + ' / giorno</small>' : '<small>Tariffa da confermare</small>') + '</div>',
+      '<div class="gwr-config-price" aria-live="polite" aria-atomic="true"><span>Stima totale</span><strong data-gwr-summary-total>' + escapeHtml(displayedTotal) + '</strong>' + (vehicle.daily_price ? '<small>' + escapeHtml(vehicle.daily_price) + ' / giorno</small>' : '<small>Tariffa da confermare</small>') + '</div>',
       '<div class="gwr-config-selected-options" data-gwr-selected-options hidden></div>',
       priceBreakdown,
       '<span class="gwr-config-availability">' + escapeHtml(availability) + '</span>',
@@ -918,14 +967,15 @@
       '</aside>'
     ].join('');
 
-    var mobileAction = '<div class="gwr-config-mobile-bar"><div><span>Stima totale</span><strong data-gwr-mobile-total>' + escapeHtml(baseMinor ? formatMinorAmount(baseMinor, currency) : 'Su richiesta') + '</strong><small>' + escapeHtml(duration) + '</small></div>' + (canBook ? '<button type="button" data-gwr-start-booking>Prenota</button>' : '<button type="button" disabled>Completa le date</button>') + '</div>';
+    var mobileLabel = availabilityState.available === false ? 'Non disponibile' : 'Completa le date';
+    var mobileAction = '<div class="gwr-config-mobile-bar"><div><span>Stima totale</span><strong data-gwr-mobile-total>' + escapeHtml(displayedTotal) + '</strong><small>' + escapeHtml(duration) + '</small></div>' + (canBook ? '<button type="button" data-gwr-start-booking>Prenota</button>' : '<button type="button" disabled>' + mobileLabel + '</button>') + '</div>';
 
     return [
       '<div class="gwr-vehicle-configurator" data-gwr-configurator data-gwr-vehicle-id="' + escapeHtml(vehicle.id || '') + '">',
       '<header class="gwr-vehicle-configurator__header">',
-      '<div><span class="gwr-config-category">' + escapeHtml(vehicle.category || 'Noleggio veicolo') + '</span><h2 id="gwr-modal-title">' + escapeHtml(title) + '</h2>',
-      '<p id="gwr-modal-description">' + escapeHtml(metaLine || 'Dettagli e condizioni del veicolo selezionato') + '</p></div>',
-      '<span class="gwr-config-header-status">' + escapeHtml(availability) + '</span>',
+      '<div><span class="gwr-config-category">' + escapeHtml(vehicle.category || 'Noleggio veicolo') + '</span><h2 id="' + escapeHtml(modalTitleId) + '">' + escapeHtml(title) + '</h2>',
+      '<p id="' + escapeHtml(modalDescriptionId) + '">' + escapeHtml(metaLine || 'Dettagli e condizioni del veicolo selezionato') + '</p></div>',
+      '<span class="gwr-config-header-status' + (availabilityState.available === false ? ' is-unavailable' : '') + '">' + escapeHtml(availability) + '</span>',
       '</header>',
       '<div class="gwr-vehicle-configurator__body">',
       '<main class="gwr-vehicle-configurator__main">',
@@ -941,25 +991,77 @@
     ].join('');
   }
 
-  function loadVehicleDetails(vehicle) {
-    if (vehicle.rental_terms || !vehicle.id) return Promise.resolve(vehicle);
+  function loadVehicleDetails(vehicleId, dates, force) {
     var cfg = catalogConfig();
+    var cacheKey = vehicleDetailCacheKey(vehicleId, dates);
+    if (force) vehicleDetailsCache.delete(cacheKey);
+    if (!force && vehicleDetailsCache.has(cacheKey)) return Promise.resolve(vehicleDetailsCache.get(cacheKey));
+    if (!cfg.ajaxUrl || !cfg.nonce) return Promise.reject(new Error('request_configuration_missing'));
+
+    if (activeVehicleRequest && typeof activeVehicleRequest.abort === 'function') activeVehicleRequest.abort();
+    var controller = typeof window.AbortController === 'function' ? new window.AbortController() : null;
+    activeVehicleRequest = controller;
     var body = new URLSearchParams();
     body.set('action', 'gwr_vehicle_detail');
     body.set('nonce', cfg.nonce || '');
-    body.set('vehicle_id', vehicle.id);
-    return window.fetch(cfg.ajaxUrl, {
+    body.set('vehicle_id', vehicleId);
+    ['start_date', 'pickup_time', 'end_date', 'return_time', 'pickup_location', 'return_location', 'different_return', 'coupon', 'coupon_code'].forEach(function (key) {
+      if (dates && dates[key] !== undefined && dates[key] !== '') body.set(key, dates[key]);
+    });
+    var requestOptions = {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
       body: body.toString()
-    }).then(function (response) {
-      if (!response.ok) throw new Error('Vehicle detail request failed');
-      return response.json();
+    };
+    if (controller) requestOptions.signal = controller.signal;
+
+    return window.fetch(cfg.ajaxUrl, requestOptions).then(function (response) {
+      return response.text().then(function (text) {
+        var payload;
+        try { payload = JSON.parse(text); } catch (error) { throw new Error('invalid_response'); }
+        if (!response.ok || !payload || !payload.success) {
+          var requestError = new Error(payload && payload.data && payload.data.message ? payload.data.message : 'request_failed');
+          requestError.code = payload && payload.data ? payload.data.code : 'request_failed';
+          throw requestError;
+        }
+        return payload.data;
+      });
     }).then(function (payload) {
-      if (!payload || !payload.success || !payload.data || !payload.data.vehicle) throw new Error('Invalid vehicle detail payload');
-      return payload.data.vehicle;
+      var vehicle = normalizeVehicleDetails(payload);
+      if (!vehicle.id || vehicle.id !== Number(vehicleId)) throw new Error('invalid_vehicle_payload');
+      vehicleDetailsCache.set(cacheKey, vehicle);
+      return vehicle;
+    }).finally(function () {
+      if (activeVehicleRequest === controller) activeVehicleRequest = null;
     });
+  }
+
+  function modalIds(modal) {
+    return {
+      title: modal.getAttribute('data-gwr-modal-title-id') || 'gwr-modal-title',
+      description: modal.getAttribute('data-gwr-modal-description-id') || 'gwr-modal-description'
+    };
+  }
+
+  function showVehicleDetailsLoading(modal, content) {
+    var ids = modalIds(modal);
+    content.innerHTML = '<div class="gwr-modal-loading" role="status"><span aria-hidden="true"></span><div><h2 id="' + escapeHtml(ids.title) + '">Caricamento dettagli veicolo</h2><p id="' + escapeHtml(ids.description) + '">Stiamo preparando disponibilita, condizioni e tariffa.</p></div></div>';
+    var dialog = qs(modal, '.gwr-modal__dialog');
+    if (dialog) dialog.setAttribute('aria-busy', 'true');
+  }
+
+  function showVehicleDetailsError(modal, content, context, error) {
+    var ids = modalIds(modal);
+    var title = context && context.vehicleTitle ? context.vehicleTitle : 'veicolo selezionato';
+    var links = contactLinks({ title: title }, context ? context.dates : {});
+    var contactAction = links.whatsapp ? '<a class="gwr-button-secondary" href="' + escapeHtml(links.whatsapp) + '" target="_blank" rel="noopener noreferrer">Contatta il noleggiatore</a>' : (links.email ? '<a class="gwr-button-secondary" href="' + escapeHtml(links.email) + '">Contatta il noleggiatore</a>' : '');
+    content.innerHTML = '<div class="gwr-modal-load-error" role="alert"><span class="gwr-modal-load-error__icon" aria-hidden="true">!</span><h2 id="' + escapeHtml(ids.title) + '">Non e stato possibile caricare i dettagli del veicolo</h2><p id="' + escapeHtml(ids.description) + '">Riprova oppure torna ai risultati.</p><div class="gwr-modal-load-error__actions"><button type="button" class="gwr-button" data-gwr-retry-vehicle>Riprova</button><button type="button" class="gwr-button-secondary" data-gwr-close-modal>Chiudi</button>' + contactAction + '</div></div>';
+    var dialog = qs(modal, '.gwr-modal__dialog');
+    if (dialog) dialog.setAttribute('aria-busy', 'false');
+    debugLog('Vehicle detail failed', error && (error.code || error.message) ? (error.code || error.message) : 'unknown');
+    var retry = qs(content, '[data-gwr-retry-vehicle]');
+    if (retry) retry.focus();
   }
 
   function prepareModalSections(modal) {
@@ -975,16 +1077,17 @@
     });
   }
 
-  function openModalFromTrigger(trigger) {
-    var catalog = trigger.closest('[data-gwr-catalog]') || document;
-    var modal = qs(catalog, '[data-gwr-modal]') || qs(document, '[data-gwr-modal]');
-    var content = modal ? qs(modal, '[data-gwr-modal-content]') : null;
-    if (!modal || !content) throw new Error('Missing modal shell');
-    if (modal.classList.contains('is-open')) return;
-    var vehicle = decodeVehiclePayload(trigger);
-    var dates = formDataObject(qs(catalog, '[data-gwr-filter-form]'));
-    lastModalTrigger = trigger;
-    content.innerHTML = '<div class="gwr-modal-loading" role="status"><span aria-hidden="true"></span><strong>Caricamento condizioni di noleggio...</strong></div>';
+  function requestVehicleModal(context, force) {
+    var modal = context.modal;
+    var content = qs(modal, '[data-gwr-modal-content]');
+    if (!content) throw new Error('missing_modal_content');
+    vehicleRequestSequence += 1;
+    var requestSequence = vehicleRequestSequence;
+    if (activeVehicleRequestContext && activeVehicleRequestContext.trigger) activeVehicleRequestContext.trigger.disabled = false;
+    activeVehicleRequestContext = context;
+    if (context.trigger && 'disabled' in context.trigger) context.trigger.disabled = true;
+    activeBookingContext = null;
+    showVehicleDetailsLoading(modal, content);
     content.scrollTop = 0;
     modal.hidden = false;
     modal.removeAttribute('hidden');
@@ -994,27 +1097,54 @@
     document.body.classList.add('gwr-modal-open');
     var closeButton = qs(modal, '.gwr-modal__close');
     if (closeButton) closeButton.focus();
-    loadVehicleDetails(vehicle).then(function (fullVehicle) {
-      if (!modal.classList.contains('is-open')) return;
-      activeBookingContext = { vehicle: fullVehicle, dates: dates, startedAt: Math.floor(Date.now() / 1000) };
-      content.innerHTML = renderModalContent(fullVehicle, dates);
+    loadVehicleDetails(context.vehicleId, context.dates, force).then(function (fullVehicle) {
+      if (!modal.classList.contains('is-open') || requestSequence !== vehicleRequestSequence || fullVehicle.id !== context.vehicleId) return;
+      activeBookingContext = { vehicle: fullVehicle, dates: context.dates, startedAt: Math.floor(Date.now() / 1000) };
+      content.innerHTML = renderModalContent(fullVehicle, context.dates, modal);
       content.scrollTop = 0;
+      var dialog = qs(modal, '.gwr-modal__dialog');
+      if (dialog) dialog.setAttribute('aria-busy', 'false');
       prepareModalSections(modal);
       updateRentalSummary(modal);
     }).catch(function (error) {
-      console.error('Gest Web Rent detail error:', error);
-      if (!modal.classList.contains('is-open')) return;
-      content.innerHTML = '<div class="gwr-modal-load-error" role="alert"><strong>Dettagli temporaneamente non disponibili</strong><p>Chiudi la finestra e riprova tra qualche istante.</p></div>';
+      if (error && error.name === 'AbortError') return;
+      if (!modal.classList.contains('is-open') || requestSequence !== vehicleRequestSequence) return;
+      showVehicleDetailsError(modal, content, context, error);
+    }).finally(function () {
+      if (context.trigger && 'disabled' in context.trigger) context.trigger.disabled = false;
     });
+  }
+
+  function openModalFromTrigger(trigger) {
+    var catalog = trigger.closest('[data-gwr-catalog]') || document;
+    var modal = qs(catalog, '[data-gwr-modal]') || qs(document, '[data-gwr-modal]');
+    var vehicleId = vehicleIdFromTrigger(trigger);
+    if (!modal || !vehicleId) throw new Error('missing_vehicle_reference');
+    var card = trigger.closest('[data-gwr-card]');
+    var titleNode = card ? qs(card, '.gwr-vehicle-card__title') : null;
+    lastModalTrigger = trigger;
+    requestVehicleModal({ modal: modal, vehicleId: vehicleId, dates: formDataObject(qs(catalog, '[data-gwr-filter-form]')), vehicleTitle: titleNode ? titleNode.textContent.trim() : '', trigger: trigger }, false);
+  }
+
+  function retryVehicleDetails(modal) {
+    if (!activeVehicleRequestContext || activeVehicleRequestContext.modal !== modal) return;
+    requestVehicleModal(activeVehicleRequestContext, true);
   }
 
   function closeModal(modal) {
     if (!modal) return;
     var content = qs(modal, '[data-gwr-modal-content]');
+    vehicleRequestSequence += 1;
+    if (activeVehicleRequest && typeof activeVehicleRequest.abort === 'function') activeVehicleRequest.abort();
+    activeVehicleRequest = null;
+    if (activeVehicleRequestContext && activeVehicleRequestContext.trigger) activeVehicleRequestContext.trigger.disabled = false;
+    activeVehicleRequestContext = null;
     modal.classList.remove('is-open');
     modal.hidden = true;
     modal.setAttribute('hidden', 'hidden');
     modal.setAttribute('aria-hidden', 'true');
+    var dialog = qs(modal, '.gwr-modal__dialog');
+    if (dialog) dialog.setAttribute('aria-busy', 'false');
     if (content) content.innerHTML = '';
     document.documentElement.classList.remove('gwr-modal-open');
     document.body.classList.remove('gwr-modal-open');
@@ -1305,6 +1435,7 @@
       data.pickup_date = data.start_date;
       data.return_date = data.end_date;
       lastRequestData = Object.assign({}, data);
+      clearVehicleDetailsCache();
       body.append('action', 'gwr_filter_catalog');
       body.append('nonce', cfg.nonce);
       Object.keys(data).forEach(function (key) { body.append(key, data[key]); });
@@ -1327,7 +1458,7 @@
           try { resultsToolbar.focus({ preventScroll: true }); } catch (error) { resultsToolbar.focus(); }
         }
       }).catch(function (error) {
-        console.error('Gest Web Rent filter error:', error);
+        debugLog('Catalog filter failed', error && error.message ? error.message : 'unknown');
         clearCatalogError(errorNode);
         renderTechnicalError();
       }).finally(function () { setLoading(false); });
@@ -1463,11 +1594,16 @@
     if (trigger) {
       event.preventDefault();
       try { openModalFromTrigger(trigger); } catch (error) {
-        console.error('Gest Web Rent modal error:', error);
+        debugLog('Vehicle modal could not open', error && error.message ? error.message : 'unknown');
         var catalog = trigger.closest('[data-gwr-catalog]');
         var errorNode = catalog ? qs(catalog, '[data-gwr-error]') : null;
         if (errorNode) { errorNode.textContent = (catalogConfig().i18n.modalError || 'Impossibile aprire i dettagli del veicolo.'); errorNode.hidden = false; }
       }
+      return;
+    }
+    var retryVehicle = event.target.closest('[data-gwr-retry-vehicle]');
+    if (retryVehicle) {
+      retryVehicleDetails(retryVehicle.closest('[data-gwr-modal]'));
       return;
     }
     var closeTrigger = event.target.closest('[data-gwr-close-modal]');

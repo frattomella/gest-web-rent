@@ -124,13 +124,150 @@ class GWR_Frontend {
 
 	/** Load the extended modal payload only when requested. */
 	public static function ajax_vehicle_detail() {
-		check_ajax_referer( 'gwr_catalog_nonce', 'nonce' );
-		$vehicle_id = isset( $_POST['vehicle_id'] ) ? absint( $_POST['vehicle_id'] ) : 0;
-		$vehicle = $vehicle_id ? GWR_CPT::get_vehicle( $vehicle_id ) : null;
-		if ( ! $vehicle || 'active' !== $vehicle['status'] ) {
-			wp_send_json_error( array( 'message' => __( 'Veicolo non disponibile.', 'gest-web-rent' ) ), 404 );
+		if ( ! check_ajax_referer( 'gwr_catalog_nonce', 'nonce', false ) ) {
+			wp_send_json_error(
+				array(
+					'code'    => 'invalid_nonce',
+					'message' => __( 'La sessione e scaduta. Aggiorna la pagina e riprova.', 'gest-web-rent' ),
+				),
+				403
+			);
 		}
-		wp_send_json_success( array( 'vehicle' => GWR_CPT::public_payload( $vehicle, true ) ) );
+
+		$vehicle_id = isset( $_POST['vehicle_id'] ) ? absint( $_POST['vehicle_id'] ) : 0;
+		$details    = self::get_public_vehicle_details( $vehicle_id, $_POST );
+
+		if ( is_wp_error( $details ) ) {
+			$error_data = $details->get_error_data();
+			$status     = is_array( $error_data ) && ! empty( $error_data['status'] ) ? absint( $error_data['status'] ) : 400;
+			wp_send_json_error(
+				array(
+					'code'    => $details->get_error_code(),
+					'message' => $details->get_error_message(),
+				),
+				$status
+			);
+		}
+
+		wp_send_json_success( $details );
+	}
+
+	/**
+	 * Build the single public payload used by the vehicle configurator.
+	 *
+	 * Secondary pricing failures never hide an otherwise valid vehicle.
+	 *
+	 * @param int   $vehicle_id Vehicle ID.
+	 * @param array $context Search context.
+	 * @return array|WP_Error
+	 */
+	public static function get_public_vehicle_details( $vehicle_id, $context = array() ) {
+		$vehicle_id = absint( $vehicle_id );
+		if ( ! $vehicle_id ) {
+			return new WP_Error( 'invalid_vehicle_id', __( 'Il veicolo selezionato non e valido.', 'gest-web-rent' ), array( 'status' => 400 ) );
+		}
+
+		$vehicle = GWR_CPT::get_vehicle( $vehicle_id );
+		if ( ! $vehicle || 'active' !== ( $vehicle['status'] ?? '' ) ) {
+			return new WP_Error( 'vehicle_not_found', __( 'Il veicolo selezionato non e disponibile.', 'gest-web-rent' ), array( 'status' => 404 ) );
+		}
+
+		$filters = self::filters_from_request( is_array( $context ) ? $context : array() );
+		$period  = self::detail_period( $filters );
+		if ( is_wp_error( $period ) ) {
+			return $period;
+		}
+
+		$payload = GWR_CPT::public_payload( $vehicle, true );
+		if ( empty( $payload['id'] ) ) {
+			return new WP_Error( 'invalid_response', __( 'Non e stato possibile preparare i dettagli del veicolo.', 'gest-web-rent' ), array( 'status' => 500 ) );
+		}
+
+		$availability = array( 'checked' => false, 'available' => null, 'status' => 'not_checked' );
+		$pricing      = array( 'status' => 'not_requested' );
+
+		if ( $period ) {
+			$available    = class_exists( 'GWR_Bookings' )
+				? GWR_Bookings::is_period_available( $vehicle_id, $period['pickup_mysql'], $period['return_mysql'] )
+				: GWR_CPT::is_available( $vehicle_id, $filters['start_date'], $filters['end_date'] );
+			$availability = array( 'checked' => true, 'available' => (bool) $available, 'status' => $available ? 'available' : 'unavailable' );
+
+			if ( class_exists( 'GWR_Pricing_Service' ) ) {
+				$terms_payload = array(
+					'rental_terms' => is_array( $payload['rental_terms'] ?? null ) ? $payload['rental_terms'] : array(),
+					'extras'       => is_array( $payload['extras'] ?? null ) ? $payload['extras'] : array(),
+				);
+				$coupon_code   = sanitize_text_field( wp_unslash( $context['coupon_code'] ?? ( $context['coupon'] ?? '' ) ) );
+				$quote         = GWR_Pricing_Service::calculate( $vehicle, $period, array( 'extras' => array(), 'coverages' => array() ), array(), $terms_payload, array( 'coupon_code' => $coupon_code ) );
+				$pricing       = is_wp_error( $quote ) ? array( 'status' => 'unavailable', 'code' => $quote->get_error_code() ) : self::public_pricing_details( $quote );
+			}
+		}
+
+		$settings = GWR_Admin::get_settings();
+		$contact  = array(
+			'dealer_name'    => sanitize_text_field( (string) ( $settings['dealer_name'] ?? '' ) ),
+			'whatsapp_ready' => ! empty( preg_replace( '/\D+/', '', (string) ( $settings['whatsapp_number'] ?? '' ) ) ),
+			'email_ready'    => is_email( sanitize_email( (string) ( $settings['contact_email'] ?? '' ) ) ),
+		);
+
+		$payload['pricing']      = $pricing;
+		$payload['availability'] = $availability;
+
+		return array(
+			'vehicle'      => $payload,
+			'pricing'      => $pricing,
+			'availability' => $availability,
+			'rental_terms' => $payload['rental_terms'] ?? array(),
+			'extras'       => $payload['extras'] ?? array(),
+			'contact'      => $contact,
+		);
+	}
+
+	/** Validate an optional period used for detail pricing and availability. */
+	private static function detail_period( $filters ) {
+		if ( empty( $filters['start_date'] ) && empty( $filters['end_date'] ) ) {
+			return null;
+		}
+
+		$range = GWR_CPT::normalize_date_range( $filters['start_date'], $filters['end_date'] );
+		if ( is_wp_error( $range ) || empty( $filters['pickup_time'] ) || empty( $filters['return_time'] ) ) {
+			return new WP_Error( 'invalid_period', __( 'Il periodo selezionato non e valido.', 'gest-web-rent' ), array( 'status' => 400 ) );
+		}
+
+		$timezone = wp_timezone();
+		$pickup   = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $range['start_date'] . ' ' . $filters['pickup_time'], $timezone );
+		$return   = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $range['end_date'] . ' ' . $filters['return_time'], $timezone );
+		if ( ! $pickup || ! $return || $return <= $pickup ) {
+			return new WP_Error( 'invalid_period', __( 'La riconsegna deve essere successiva al ritiro.', 'gest-web-rent' ), array( 'status' => 400 ) );
+		}
+
+		$duration = class_exists( 'GWR_Pricing_Service' ) ? GWR_Pricing_Service::calculate_billable_duration( $pickup, $return ) : array( 'billable_days' => 1 );
+		return array(
+			'pickup'       => $pickup,
+			'return'       => $return,
+			'pickup_mysql' => $pickup->format( 'Y-m-d H:i:s' ),
+			'return_mysql' => $return->format( 'Y-m-d H:i:s' ),
+			'days'         => max( 1, absint( $duration['billable_days'] ?? 1 ) ),
+			'duration'     => $duration,
+		);
+	}
+
+	/** Whitelist pricing fields safe for the public configurator. */
+	private static function public_pricing_details( $quote ) {
+		$currency = sanitize_text_field( (string) ( $quote['currency'] ?? 'EUR' ) );
+		$total    = (float) ( $quote['grand_total'] ?? 0 );
+		return array(
+			'status'            => 'available',
+			'currency'          => $currency,
+			'billable_days'     => absint( $quote['duration']['billable_days'] ?? 0 ),
+			'grand_total'       => $total,
+			'grand_total_minor' => (int) round( $total * 100 ),
+			'grand_total_label' => GWR_Bookings::format_money( $total, $currency ),
+			'pay_now_label'     => GWR_Bookings::format_money( (float) ( $quote['pay_now'] ?? 0 ), $currency ),
+			'pay_later_label'   => GWR_Bookings::format_money( (float) ( $quote['pay_later'] ?? 0 ), $currency ),
+			'deposit_label'     => GWR_Bookings::format_money( (float) ( $quote['deposit_due_at_pickup'] ?? 0 ), $currency ),
+			'tax_total_label'   => GWR_Bookings::format_money( (float) ( $quote['tax_total'] ?? 0 ), $currency ),
+		);
 	}
 
 	public static function register_assets() {
@@ -585,24 +722,23 @@ class GWR_Frontend {
 		$primary_title = trim( $vehicle['brand'] . ' ' . $vehicle['model'] );
 		$primary_title = $primary_title ?: $vehicle['title'];
 		$daily_price = self::format_euro( $vehicle['daily_price'] );
-		$payload_json = wp_json_encode( $payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
-		$payload_encoded = base64_encode( $payload_json );
+		$vehicle_id = absint( $vehicle['id'] );
 		$availability_label = ! empty( $filters['start_date'] ) && ! empty( $filters['end_date'] ) ? __( 'Disponibile', 'gest-web-rent' ) : __( 'Verifica disponibilita', 'gest-web-rent' );
-		$html = '<article class="gwr-vehicle-card" data-gwr-card data-gwr-vehicle-b64="' . esc_attr( $payload_encoded ) . '" data-gwr-original-index="' . esc_attr( $index ) . '" data-gwr-price="' . esc_attr( (float) $vehicle['daily_price'] ) . '" data-gwr-brand="' . esc_attr( strtolower( (string) $vehicle['brand'] ) ) . '" data-gwr-category-name="' . esc_attr( strtolower( (string) $vehicle['category'] ) ) . '" data-gwr-featured="' . ( ! empty( $vehicle['featured'] ) ? '1' : '0' ) . '">';
-		$html .= '<div class="gwr-vehicle-card__media"><button type="button" class="gwr-vehicle-card__media-button" data-gwr-open-modal aria-label="' . esc_attr( sprintf( __( 'Vedi le foto e i dettagli di %s', 'gest-web-rent' ), $primary_title ) ) . '">';
+		$html = '<article class="gwr-vehicle-card" data-gwr-card data-gwr-vehicle-id="' . esc_attr( $vehicle_id ) . '" data-gwr-original-index="' . esc_attr( $index ) . '" data-gwr-price="' . esc_attr( (float) $vehicle['daily_price'] ) . '" data-gwr-brand="' . esc_attr( strtolower( (string) $vehicle['brand'] ) ) . '" data-gwr-category-name="' . esc_attr( strtolower( (string) $vehicle['category'] ) ) . '" data-gwr-featured="' . ( ! empty( $vehicle['featured'] ) ? '1' : '0' ) . '">';
+		$html .= '<div class="gwr-vehicle-card__media"><button type="button" class="gwr-vehicle-card__media-button" data-gwr-open-modal data-gwr-vehicle-id="' . esc_attr( $vehicle_id ) . '" aria-label="' . esc_attr( sprintf( __( 'Vedi le foto e i dettagli di %s', 'gest-web-rent' ), $primary_title ) ) . '">';
 		$html .= self::card_image( $cover, $primary_title );
 		$html .= '</button><span class="gwr-vehicle-card__status">' . esc_html( $availability_label ) . '</span>';
 		if ( ! empty( $vehicle['featured'] ) ) { $html .= '<span class="gwr-vehicle-card__recommended">' . esc_html__( 'Consigliato', 'gest-web-rent' ) . '</span>'; }
 		$html .= '</div>';
 		$html .= '<div class="gwr-vehicle-card__content">';
 		if ( $vehicle['category'] ) { $html .= '<span class="gwr-vehicle-card__category">' . esc_html( $vehicle['category'] ) . '</span>'; }
-		$html .= '<h3 class="gwr-vehicle-card__title"><button type="button" data-gwr-open-modal>' . esc_html( $primary_title ) . '</button></h3>';
+		$html .= '<h3 class="gwr-vehicle-card__title"><button type="button" data-gwr-open-modal data-gwr-vehicle-id="' . esc_attr( $vehicle_id ) . '">' . esc_html( $primary_title ) . '</button></h3>';
 		if ( $vehicle['version'] ) { $html .= '<p class="gwr-vehicle-card__version">' . esc_html( $vehicle['version'] ) . '</p>'; }
 		$html .= self::card_specs( $vehicle );
 		$html .= self::card_inclusions( $vehicle );
 		if ( $vehicle['location'] ) { $html .= '<div class="gwr-vehicle-card__location"><strong>' . esc_html__( 'Ritiro presso sede', 'gest-web-rent' ) . '</strong><span>' . esc_html( $vehicle['location'] ) . '</span>' . ( ! empty( $vehicle['home_delivery'] ) ? '<small>' . esc_html__( 'Consegna a domicilio disponibile', 'gest-web-rent' ) . '</small>' : '' ) . '</div>'; }
 		$html .= '</div>';
-		$html .= '<div class="gwr-vehicle-card__pricing"><span class="gwr-vehicle-card__pricing-label">' . esc_html__( 'Tariffa giornaliera', 'gest-web-rent' ) . '</span><div class="gwr-vehicle-card__daily-price"><strong>' . esc_html( $daily_price ?: __( 'Su richiesta', 'gest-web-rent' ) ) . '</strong>' . ( $daily_price ? '<span>' . esc_html__( '/ giorno', 'gest-web-rent' ) . '</span>' : '' ) . '</div><span class="gwr-vehicle-card__duration" data-gwr-card-duration>' . esc_html__( 'Seleziona il periodo', 'gest-web-rent' ) . '</span><span class="gwr-vehicle-card__total-note">' . esc_html__( 'Totale su richiesta', 'gest-web-rent' ) . '</span><button type="button" class="gwr-button gwr-vehicle-card__cta" data-gwr-open-modal>' . esc_html__( 'Vedi dettagli', 'gest-web-rent' ) . '</button></div>';
+		$html .= '<div class="gwr-vehicle-card__pricing"><span class="gwr-vehicle-card__pricing-label">' . esc_html__( 'Tariffa giornaliera', 'gest-web-rent' ) . '</span><div class="gwr-vehicle-card__daily-price"><strong>' . esc_html( $daily_price ?: __( 'Su richiesta', 'gest-web-rent' ) ) . '</strong>' . ( $daily_price ? '<span>' . esc_html__( '/ giorno', 'gest-web-rent' ) . '</span>' : '' ) . '</div><span class="gwr-vehicle-card__duration" data-gwr-card-duration>' . esc_html__( 'Seleziona il periodo', 'gest-web-rent' ) . '</span><span class="gwr-vehicle-card__total-note">' . esc_html__( 'Totale su richiesta', 'gest-web-rent' ) . '</span><button type="button" class="gwr-button gwr-vehicle-card__cta" data-gwr-open-modal data-gwr-vehicle-id="' . esc_attr( $vehicle_id ) . '">' . esc_html__( 'Vedi dettagli', 'gest-web-rent' ) . '</button></div>';
 		$html .= '</article>';
 		return $html;
 	}
@@ -657,7 +793,9 @@ class GWR_Frontend {
 	}
 
 	private static function modal_markup() {
-		return '<div class="gwr-modal" data-gwr-modal aria-hidden="true" hidden><div class="gwr-modal__backdrop" data-gwr-close-modal></div><div class="gwr-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="gwr-modal-title" aria-describedby="gwr-modal-description" tabindex="-1"><button type="button" class="gwr-modal__close" data-gwr-close-modal aria-label="' . esc_attr__( 'Chiudi dettagli veicolo', 'gest-web-rent' ) . '">&times;</button><div class="gwr-modal__content" data-gwr-modal-content></div></div></div>';
+		$title_id       = wp_unique_id( 'gwr-modal-title-' );
+		$description_id = wp_unique_id( 'gwr-modal-description-' );
+		return '<div class="gwr-modal" data-gwr-modal data-gwr-modal-title-id="' . esc_attr( $title_id ) . '" data-gwr-modal-description-id="' . esc_attr( $description_id ) . '" aria-hidden="true" hidden><div class="gwr-modal__backdrop" data-gwr-close-modal></div><div class="gwr-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="' . esc_attr( $title_id ) . '" aria-describedby="' . esc_attr( $description_id ) . '" aria-busy="false" tabindex="-1"><button type="button" class="gwr-modal__close" data-gwr-close-modal aria-label="' . esc_attr__( 'Chiudi dettagli veicolo', 'gest-web-rent' ) . '">&times;</button><div class="gwr-modal__content" data-gwr-modal-content aria-live="polite"></div></div></div>';
 	}
 
 	private static function date_field( $name, $label, $value, $role ) {

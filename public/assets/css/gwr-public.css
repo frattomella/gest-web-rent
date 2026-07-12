@@ -994,21 +994,23 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 .gwr-modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(8, 15, 30, .68);
-  backdrop-filter: blur(10px);
+  background: rgba(8, 15, 30, .62);
+  backdrop-filter: blur(8px);
 }
 
 .gwr-modal__dialog {
   position: relative;
   z-index: 1;
-  width: min(1480px, 94vw);
-  height: min(94vh, 980px);
-  max-height: 94vh;
+  width: min(1240px, calc(100vw - 32px));
+  height: min(90vh, 900px);
+  height: min(90dvh, 900px);
+  max-height: 90vh;
+  max-height: 90dvh;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, .42);
-  border-radius: 26px;
+  border-radius: 24px;
   background: #fff;
-  box-shadow: 0 42px 124px rgba(2, 8, 23, .36);
+  box-shadow: 0 32px 90px rgba(2, 8, 23, .32);
 }
 
 .gwr-modal__content {
@@ -1017,6 +1019,7 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: #b8c5dc transparent;
+  overscroll-behavior: contain;
 }
 
 .gwr-modal__close {
@@ -1052,8 +1055,8 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 
 .gwr-vehicle-configurator__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(310px, 350px);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 330px);
+  gap: 22px;
   align-items: start;
   padding: 24px;
 }
@@ -1072,9 +1075,9 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 .gwr-modal-gallery-frame {
   position: relative;
   overflow: hidden;
-  aspect-ratio: 16 / 9;
-  min-height: clamp(330px, 48vh, 560px);
-  max-height: 58vh;
+  aspect-ratio: 4 / 3;
+  min-height: clamp(280px, 42vh, 470px);
+  max-height: 500px;
   border: 1px solid var(--gwr-border);
   border-radius: 20px;
   background: #f1f4f8;
@@ -1195,7 +1198,7 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  min-height: 92px;
+  min-height: 88px;
   padding: 18px 82px 18px 26px;
   border-bottom: 1px solid var(--gwr-border);
   background: rgba(255, 255, 255, .96);
@@ -1242,6 +1245,12 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   color: var(--gwr-success);
   font-size: .72rem;
   font-weight: 720;
+}
+
+.gwr-config-header-status.is-unavailable {
+  border-color: #f0c7c3;
+  background: #fff5f4;
+  color: #b42318;
 }
 
 .gwr-config-nav {
@@ -1406,14 +1415,36 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 
 .gwr-modal-loading,
 .gwr-modal-load-error {
-  min-height: 360px;
+  min-height: 100%;
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 12px;
-  padding: 32px;
+  gap: 18px;
+  padding: clamp(32px, 7vw, 72px);
   color: var(--gwr-muted);
   text-align: center;
+}
+
+.gwr-modal-loading > div {
+  display: grid;
+  gap: 7px;
+  max-width: 460px;
+}
+
+.gwr-modal-loading h2,
+.gwr-modal-load-error h2 {
+  margin: 0;
+  color: var(--gwr-ink);
+  font-size: clamp(1.35rem, 3vw, 1.9rem);
+  line-height: 1.2;
+  letter-spacing: -.025em;
+}
+
+.gwr-modal-loading p,
+.gwr-modal-load-error p {
+  margin: 0;
+  font-size: .94rem;
+  line-height: 1.65;
 }
 
 .gwr-modal-loading span {
@@ -1425,8 +1456,26 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   animation: gwr-modal-spin .8s linear infinite;
 }
 
-.gwr-modal-load-error strong { color: var(--gwr-ink); font-size: 18px; }
-.gwr-modal-load-error p { margin: 0; }
+.gwr-modal-load-error__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid #f0c7c3;
+  border-radius: 16px;
+  background: #fff5f4;
+  color: #b42318;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.gwr-modal-load-error__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
 
 @keyframes gwr-modal-spin { to { transform: rotate(360deg); } }
 
@@ -1699,6 +1748,12 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   outline-offset: 3px;
 }
 
+.gwr-modal-load-error__actions a:focus-visible,
+.gwr-modal-load-error__actions button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, .36);
+  outline-offset: 3px;
+}
+
 html.gwr-modal-open,
 body.gwr-modal-open {
   overflow: hidden;
@@ -1782,9 +1837,11 @@ body.gwr-modal-open {
 
 @media (max-width: 900px) {
   .gwr-modal__dialog {
-    width: 96vw;
-    height: 96vh;
-    max-height: 96vh;
+    width: calc(100vw - 20px);
+    height: 94vh;
+    height: 94dvh;
+    max-height: 94vh;
+    max-height: 94dvh;
   }
 
   .gwr-modal__content {
@@ -1831,7 +1888,7 @@ body.gwr-modal-open {
 
   .gwr-vehicle-configurator__body { gap: 18px; padding: 14px; }
 
-  .gwr-modal-gallery-frame { min-height: 240px; border-radius: 16px; }
+  .gwr-modal-gallery-frame { aspect-ratio: 16 / 10; min-height: 0; max-height: none; border-radius: 16px; }
   .gwr-gallery-thumbs { grid-auto-columns: 82px; max-width: 100%; }
   .gwr-gallery-thumbs button { width: 82px; height: 62px; }
 
@@ -1981,6 +2038,15 @@ body.gwr-modal-open {
     width: 100%;
   }
 
+  .gwr-modal-load-error__actions {
+    display: grid;
+    width: 100%;
+  }
+
+  .gwr-modal-load-error__actions > * {
+    width: 100%;
+  }
+
   .gwr-filter-actions,
   .gwr-empty-state__actions,
   .gwr-technical-state__actions {
@@ -2059,6 +2125,10 @@ body.gwr-modal-open {
 
   .gwr-config-mobile-bar { grid-template-columns: minmax(92px, .7fr) minmax(150px, 1.3fr); gap: 8px; padding: 9px 10px; }
   .gwr-config-mobile-bar > a, .gwr-config-mobile-bar > button { padding: 0 9px; font-size: .72rem; }
+
+  .gwr-vehicle-configurator__body { padding: 10px; }
+  .gwr-vehicle-configurator__header { padding-left: 12px; }
+  .gwr-modal-loading, .gwr-modal-load-error { padding: 28px 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
