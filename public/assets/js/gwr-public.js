@@ -191,9 +191,10 @@
   }
 
   function decodeVehiclePayload(trigger) {
-    var b64 = trigger.getAttribute('data-gwr-vehicle-b64');
+    var payloadNode = trigger.hasAttribute('data-gwr-vehicle-b64') ? trigger : trigger.closest('[data-gwr-vehicle-b64]');
+    var b64 = payloadNode ? payloadNode.getAttribute('data-gwr-vehicle-b64') : '';
     if (b64) { return JSON.parse(window.atob(b64)); }
-    var raw = trigger.getAttribute('data-gwr-vehicle');
+    var raw = payloadNode ? payloadNode.getAttribute('data-gwr-vehicle') : '';
     if (raw) { return JSON.parse(raw); }
     throw new Error('Missing vehicle payload');
   }
@@ -496,31 +497,52 @@
     else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   }
 
+  function compareVehicleCards(mode, left, right) {
+    if (mode === 'recommended') return Number(left.getAttribute('data-gwr-original-index')) - Number(right.getAttribute('data-gwr-original-index'));
+    if (mode === 'brand' || mode === 'category') {
+      var attribute = mode === 'brand' ? 'data-gwr-brand' : 'data-gwr-category-name';
+      return String(left.getAttribute(attribute) || '').localeCompare(String(right.getAttribute(attribute) || ''), 'it', { sensitivity: 'base' });
+    }
+    var leftPrice = Number(left.getAttribute('data-gwr-price'));
+    var rightPrice = Number(right.getAttribute('data-gwr-price'));
+    var leftMissing = !Number.isFinite(leftPrice) || leftPrice <= 0;
+    var rightMissing = !Number.isFinite(rightPrice) || rightPrice <= 0;
+    if (leftMissing !== rightMissing) return leftMissing ? 1 : -1;
+    if (leftMissing && rightMissing) return 0;
+    return mode === 'price_desc' ? rightPrice - leftPrice : leftPrice - rightPrice;
+  }
+
   function initCatalog(catalog) {
     var form = qs(catalog, '[data-gwr-filter-form]');
+    var secondaryForm = qs(catalog, '[data-gwr-secondary-form]');
     var results = qs(catalog, '[data-gwr-results]');
     var resultsShell = results ? results.parentNode : null;
     var counts = qsa(catalog, '[data-gwr-count]');
-    var initialResults = qs(catalog, '[data-gwr-initial-results]');
     var searchSummary = qs(catalog, '[data-gwr-search-summary]');
     var summaryLocation = qs(catalog, '[data-gwr-summary-location]');
     var summaryPeriod = qs(catalog, '[data-gwr-summary-period]');
     var summaryDuration = qs(catalog, '[data-gwr-summary-duration]');
+    var toolbarPeriod = qs(catalog, '[data-gwr-toolbar-period]');
+    var resultsToolbar = qs(catalog, '[data-gwr-results-toolbar]');
+    var categorySlot = qs(catalog, '[data-gwr-category-slot]');
+    var activeFilters = qs(catalog, '[data-gwr-active-filters]');
+    var sortSelect = qs(catalog, '[data-gwr-sort]');
     var errorNode = qs(catalog, '[data-gwr-error]');
     var formError = qs(form, '[data-gwr-form-error]');
     var submitButton = qs(form, '[data-gwr-search-submit]');
     var submitLabel = qs(form, '[data-gwr-search-label]');
-    var filterToggle = qs(form, '[data-gwr-filter-toggle]');
-    var advancedFilters = qs(form, '[data-gwr-filter-advanced]');
-    var filterCount = qs(form, '[data-gwr-filter-count]');
+    var filterToggles = qsa(catalog, '[data-gwr-filter-toggle]');
+    var advancedFilters = qs(catalog, '[data-gwr-filter-advanced]');
+    var filterCounts = qsa(catalog, '[data-gwr-filter-count]');
     var differentReturn = qs(form, '[data-gwr-different-return]');
     var returnLocationPanel = qs(form, '[data-gwr-return-location]');
     var requestInProgress = false;
-    if (!form || !results) return;
+    var lastRequestData = null;
+    if (!form || !secondaryForm || !results) return;
 
     function setAdvancedFilters(open) {
-      if (!filterToggle || !advancedFilters) return;
-      filterToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (!advancedFilters) return;
+      filterToggles.forEach(function (toggle) { toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); });
       advancedFilters.hidden = !open;
       advancedFilters.classList.toggle('is-open', open);
     }
@@ -540,10 +562,11 @@
     }
 
     function updateFilterCount() {
-      if (!filterCount) return;
-      var total = activeSecondaryFilterCount(form);
-      filterCount.textContent = '(' + total + ')';
-      filterCount.hidden = total === 0;
+      var total = activeSecondaryFilterCount(secondaryForm);
+      filterCounts.forEach(function (node) {
+        node.textContent = node.closest('.gwr-toolbar-filter') ? '(' + total + ')' : '(' + total + ')';
+        node.hidden = total === 0;
+      });
     }
 
     function updateResultCount(total) {
@@ -560,7 +583,7 @@
       if (summaryLocation) summaryLocation.textContent = pickupLabel === returnLabel ? pickupLabel : pickupLabel + ' \u2192 ' + returnLabel;
       if (summaryPeriod) summaryPeriod.textContent = isoToItalianDate(data.start_date) + ', ' + data.pickup_time + ' \u2192 ' + isoToItalianDate(data.end_date) + ', ' + data.return_time;
       if (summaryDuration) summaryDuration.textContent = rentalDurationLabel(data);
-      if (initialResults) initialResults.hidden = true;
+      if (toolbarPeriod) toolbarPeriod.textContent = isoToItalianDate(data.start_date) + ' \u2192 ' + isoToItalianDate(data.end_date);
       if (searchSummary) searchSummary.hidden = false;
     }
 
@@ -576,39 +599,148 @@
       requestInProgress = loading;
       catalog.classList.toggle('is-loading', loading);
       form.setAttribute('aria-busy', loading ? 'true' : 'false');
+      secondaryForm.setAttribute('aria-busy', loading ? 'true' : 'false');
       if (resultsShell) resultsShell.setAttribute('aria-busy', loading ? 'true' : 'false');
-      if (submitButton) submitButton.disabled = loading;
+      qsa(form, 'input, select, button').concat(qsa(secondaryForm, 'input, select, button')).forEach(function (control) {
+        if (loading) {
+          control.setAttribute('data-gwr-disabled-before-loading', control.disabled ? '1' : '0');
+          control.disabled = true;
+        } else if (control.hasAttribute('data-gwr-disabled-before-loading')) {
+          control.disabled = control.getAttribute('data-gwr-disabled-before-loading') === '1';
+          control.removeAttribute('data-gwr-disabled-before-loading');
+        }
+      });
+      qsa(catalog, '[data-gwr-category], [data-gwr-remove-filter], [data-gwr-clear-active-filters]').forEach(function (button) { button.disabled = loading; });
       if (submitLabel) submitLabel.textContent = loading ? (cfg.i18n.searchingLabel || 'Ricerca in corso...') : (cfg.i18n.searchLabel || 'Cerca veicoli');
+    }
+
+    function currentData() {
+      return Object.assign({}, formDataObject(form), formDataObject(secondaryForm));
+    }
+
+    function clearSecondaryFilters() {
+      qsa(secondaryForm, '[data-gwr-secondary-filter]').forEach(function (field) {
+        if (field.type === 'checkbox' || field.type === 'radio') field.checked = false;
+        else field.value = '';
+      });
+      updateFilterCount();
+    }
+
+    function secondaryField(name) {
+      return qs(secondaryForm, '[name="' + name + '"]');
+    }
+
+    function filterLabel(field) {
+      if (!field || !field.value) return '';
+      if (field.name === 'max_price') {
+        var price = Number(field.value);
+        return price > 0 ? 'Massimo ' + new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(price) + ' / giorno' : '';
+      }
+      if (field.name === 'seats') return 'Almeno ' + field.value + ' posti';
+      if (field.name === 'search') return '\u201c' + field.value.trim() + '\u201d';
+      if (field.tagName === 'SELECT' && field.selectedIndex >= 0) return field.options[field.selectedIndex].textContent.trim();
+      return field.value;
+    }
+
+    function renderActiveFilters() {
+      if (!activeFilters) return;
+      activeFilters.textContent = '';
+      var fields = qsa(secondaryForm, '[data-gwr-secondary-filter]').filter(function (field) { return filterLabel(field) !== ''; });
+      if (!fields.length) {
+        activeFilters.hidden = true;
+        return;
+      }
+      var heading = document.createElement('span');
+      heading.className = 'gwr-active-filters__label';
+      heading.textContent = 'Filtri attivi';
+      activeFilters.appendChild(heading);
+      fields.forEach(function (field) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'gwr-filter-chip';
+        button.setAttribute('data-gwr-remove-filter', field.name);
+        button.setAttribute('aria-label', 'Rimuovi filtro ' + filterLabel(field));
+        button.textContent = filterLabel(field) + ' \u00d7';
+        activeFilters.appendChild(button);
+      });
+      var clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'gwr-active-filters__clear';
+      clear.setAttribute('data-gwr-clear-active-filters', '');
+      clear.textContent = 'Rimuovi tutti';
+      activeFilters.appendChild(clear);
+      activeFilters.hidden = false;
+    }
+
+    function renderSkeletons() {
+      var skeleton = '';
+      for (var index = 0; index < 3; index += 1) {
+        skeleton += '<article class="gwr-vehicle-card gwr-vehicle-card--skeleton" aria-hidden="true"><span></span><div><i></i><i></i><i></i><i></i></div><div><i></i><i></i></div></article>';
+      }
+      results.innerHTML = skeleton;
     }
 
     function renderTechnicalError() {
       var cfg = catalogConfig();
-      results.innerHTML = '<div class="gwr-technical-state" role="alert"><span class="gwr-technical-state__icon" aria-hidden="true">!</span><h3>Ricerca temporaneamente non disponibile</h3><p>' + escapeHtml(cfg.i18n.technicalError || 'Non e stato possibile completare la ricerca. Riprova tra qualche istante.') + '</p><div class="gwr-technical-state__actions"><button type="button" class="gwr-button" data-gwr-retry-search>Riprova</button><button type="button" class="gwr-button-secondary" data-gwr-edit-search>Modifica ricerca</button></div></div>';
+      results.innerHTML = '<div class="gwr-technical-state" role="alert"><span class="gwr-technical-state__icon" aria-hidden="true">!</span><h3>Non e stato possibile caricare i veicoli</h3><p>' + escapeHtml(cfg.i18n.technicalError || 'Riprova tra qualche istante.') + '</p><div class="gwr-technical-state__actions"><button type="button" class="gwr-button" data-gwr-retry-search>Riprova</button></div></div>';
     }
 
-    function update() {
+    function applySort() {
+      if (!sortSelect) return;
+      var mode = sortSelect.value;
+      var cards = qsa(results, '[data-gwr-card]').slice();
+      if (!cards.length) return;
+      cards.sort(function (left, right) { return compareVehicleCards(mode, left, right); });
+      var fragment = document.createDocumentFragment();
+      cards.forEach(function (card) { fragment.appendChild(card); });
+      results.appendChild(fragment);
+    }
+
+    function setView(view, persist) {
+      view = view === 'grid' ? 'grid' : 'list';
+      results.classList.toggle('is-grid-view', view === 'grid');
+      results.classList.toggle('is-list-view', view === 'list');
+      qsa(catalog, '[data-gwr-view]').forEach(function (button) { button.setAttribute('aria-pressed', button.getAttribute('data-gwr-view') === view ? 'true' : 'false'); });
+      if (persist) {
+        try { window.localStorage.setItem('gwr_catalog_view', view); } catch (error) { /* Storage can be disabled. */ }
+      }
+    }
+
+    function updateCardDurations(data) {
+      var label = rentalDurationLabel(data) || 'Seleziona il periodo';
+      qsa(results, '[data-gwr-card-duration]').forEach(function (node) { node.textContent = label; });
+    }
+
+    function runRequest(data) {
       var cfg = catalogConfig();
       if (!cfg.ajaxUrl || !cfg.nonce || requestInProgress) return;
-      if (!validateSearchForm(form, formError)) return;
-      var data = formDataObject(form);
       var body = new FormData();
       clearCatalogError(errorNode);
       if (data.different_return !== '1') delete data.return_location;
       data.pickup_date = data.start_date;
       data.return_date = data.end_date;
+      lastRequestData = Object.assign({}, data);
       body.append('action', 'gwr_filter_catalog');
       body.append('nonce', cfg.nonce);
       Object.keys(data).forEach(function (key) { body.append(key, data[key]); });
       setLoading(true);
+      renderSkeletons();
       return window.fetch(cfg.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body }).then(function (response) {
         if (!response.ok) throw new Error('HTTP ' + response.status);
         return response.json();
       }).then(function (json) {
         if (!json || !json.success) throw new Error('AJAX error');
         results.innerHTML = json.data.html;
+        if (categorySlot) categorySlot.innerHTML = json.data.categories || '';
         if (json.data.error) showCatalogError(errorNode, json.data.error); else clearCatalogError(errorNode);
         updateResultCount(Number(json.data.count) || 0);
         updateSearchSummary(data);
+        updateCardDurations(data);
+        applySort();
+        renderActiveFilters();
+        if (resultsToolbar) {
+          try { resultsToolbar.focus({ preventScroll: true }); } catch (error) { resultsToolbar.focus(); }
+        }
       }).catch(function (error) {
         console.error('Gest Web Rent filter error:', error);
         clearCatalogError(errorNode);
@@ -616,10 +748,20 @@
       }).finally(function () { setLoading(false); });
     }
 
+    function update() {
+      if (requestInProgress || !validateSearchForm(form, formError)) return;
+      return runRequest(currentData());
+    }
+
     setAdvancedFilters(isDesktopFilters());
     updateReturnLocation();
     updateFilterCount();
-    if (filterToggle) filterToggle.addEventListener('click', function () { setAdvancedFilters(filterToggle.getAttribute('aria-expanded') !== 'true'); });
+    renderActiveFilters();
+    updateCardDurations(currentData());
+    var savedView = 'list';
+    try { savedView = window.localStorage.getItem('gwr_catalog_view') || 'list'; } catch (error) { savedView = 'list'; }
+    setView(savedView, false);
+    filterToggles.forEach(function (toggle) { toggle.addEventListener('click', function () { setAdvancedFilters(toggle.getAttribute('aria-expanded') !== 'true'); }); });
     if (differentReturn) differentReturn.addEventListener('change', updateReturnLocation);
     qsa(form, '[data-gwr-date-display]').forEach(function (input) {
       input.addEventListener('input', function () {
@@ -641,43 +783,79 @@
     qsa(form, '[data-gwr-time-role], [data-gwr-location-field]').forEach(function (input) {
       input.addEventListener('change', function () { clearFieldError(input); });
     });
-    qsa(form, '[data-gwr-secondary-filter]').forEach(function (field) {
+    qsa(secondaryForm, '[data-gwr-secondary-filter]').forEach(function (field) {
       field.addEventListener('input', updateFilterCount);
       field.addEventListener('change', updateFilterCount);
     });
     form.addEventListener('submit', function (event) { event.preventDefault(); update(); });
+    secondaryForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!isDesktopFilters()) {
+        setAdvancedFilters(false);
+        if (filterToggles[0]) filterToggles[0].focus();
+      }
+      update();
+    });
+    if (sortSelect) sortSelect.addEventListener('change', applySort);
     catalog.addEventListener('click', function (event) {
       if (event.target.closest('[data-gwr-reset-filters]')) {
-        qsa(form, '[data-gwr-secondary-filter]').forEach(function (field) {
-          if (field.type === 'checkbox' || field.type === 'radio') field.checked = false;
-          else field.value = '';
-        });
-        updateFilterCount();
+        clearSecondaryFilters();
         return;
       }
-      if (event.target.closest('[data-gwr-apply-filters]')) {
-        if (!isDesktopFilters()) {
-          setAdvancedFilters(false);
-          if (filterToggle) filterToggle.focus();
-        }
+      if (event.target.closest('[data-gwr-reset-and-search]')) {
+        clearSecondaryFilters();
         requestFormSubmit(form);
         return;
       }
       if (event.target.closest('[data-gwr-close-filters]')) {
         setAdvancedFilters(false);
-        if (filterToggle) filterToggle.focus();
+        if (filterToggles[0]) filterToggles[0].focus();
+        return;
+      }
+      var sectionToggle = event.target.closest('[data-gwr-sidebar-section-toggle]');
+      if (sectionToggle) {
+        var sectionContent = document.getElementById(sectionToggle.getAttribute('aria-controls'));
+        var sectionOpen = sectionToggle.getAttribute('aria-expanded') !== 'true';
+        sectionToggle.setAttribute('aria-expanded', sectionOpen ? 'true' : 'false');
+        if (sectionContent) sectionContent.hidden = !sectionOpen;
+        return;
+      }
+      var categoryButton = event.target.closest('[data-gwr-category]');
+      if (categoryButton) {
+        var categoryField = secondaryField('category');
+        if (categoryField) categoryField.value = categoryButton.getAttribute('data-gwr-category') || '';
+        updateFilterCount();
+        requestFormSubmit(form);
+        return;
+      }
+      var removeFilter = event.target.closest('[data-gwr-remove-filter]');
+      if (removeFilter) {
+        var field = secondaryField(removeFilter.getAttribute('data-gwr-remove-filter'));
+        if (field) field.value = '';
+        updateFilterCount();
+        requestFormSubmit(form);
+        return;
+      }
+      if (event.target.closest('[data-gwr-clear-active-filters]')) {
+        clearSecondaryFilters();
+        requestFormSubmit(form);
+        return;
+      }
+      var viewButton = event.target.closest('[data-gwr-view]');
+      if (viewButton) {
+        setView(viewButton.getAttribute('data-gwr-view'), true);
         return;
       }
       if (event.target.closest('[data-gwr-edit-search]')) {
         focusSearch();
         return;
       }
-      if (event.target.closest('[data-gwr-retry-search]')) requestFormSubmit(form);
+      if (event.target.closest('[data-gwr-retry-search]') && lastRequestData) runRequest(Object.assign({}, lastRequestData));
     });
-    form.addEventListener('keydown', function (event) {
+    catalog.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && advancedFilters && !advancedFilters.hidden && !isDesktopFilters()) {
         setAdvancedFilters(false);
-        if (filterToggle) filterToggle.focus();
+        if (filterToggles[0]) filterToggles[0].focus();
       }
     });
     if (window.matchMedia) {

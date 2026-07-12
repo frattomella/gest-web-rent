@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0
+
+- Ridisegnato il catalogo con sidebar desktop e pannello filtri responsive condiviso.
+- Aggiunte categorie rapide basate sui veicoli disponibili e sui prezzi reali.
+- Aggiunti ordinamento client-side, vista lista/griglia persistente e chip dei filtri attivi.
+- Sostituite le vecchie card cliccabili con card semantiche orizzontali e CTA esplicite.
+- Migliorate immagini responsive, caratteristiche, servizi inclusi e informazioni sulla sede.
+- Aggiunti skeleton di caricamento e stati vuoto/errore professionali.
+
 ## 1.2.0
 
 - Introdotto un design system isolato per il catalogo pubblico.
