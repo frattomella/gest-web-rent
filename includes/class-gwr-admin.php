@@ -41,6 +41,7 @@ class GWR_Admin {
 			'dealer_name'         => get_bloginfo( 'name' ),
 			'whatsapp_number'     => '',
 			'contact_email'       => get_option( 'admin_email' ),
+			'contact_phone'       => '',
 			'primary_color'       => '#173787',
 			'whatsapp_message'    => 'Ciao, vorrei informazioni sul noleggio del veicolo {vehicle_title}. Date di interesse: {start_date} - {end_date}. Link: {site_url}',
 			'email_subject'       => 'Richiesta noleggio {vehicle_title}',
@@ -51,6 +52,12 @@ class GWR_Admin {
 			'pending_expiry_hours'=> 24,
 			'privacy_version'     => '1.0',
 			'privacy_url'         => '',
+			'operation_mode'      => class_exists( 'GWR_Operation_Mode' ) ? GWR_Operation_Mode::safe_default() : 'request',
+			'save_information_requests' => 1,
+			'public_availability_mode'   => 'status',
+			'showcase_price_mode'        => 'daily',
+			'pending_request_block_mode' => 'no',
+			'pending_request_block_hours'=> 24,
 		);
 	}
 
@@ -79,10 +86,20 @@ class GWR_Admin {
 		add_submenu_page( 'gest-web-rent', __( 'Veicoli', 'gest-web-rent' ), __( 'Veicoli', 'gest-web-rent' ), 'manage_options', 'gwr-vehicles', array( __CLASS__, 'vehicles_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Aggiungi veicolo', 'gest-web-rent' ), __( 'Aggiungi veicolo', 'gest-web-rent' ), 'manage_options', 'gwr-vehicle-edit', array( __CLASS__, 'vehicle_edit_page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Disponibilita', 'gest-web-rent' ), __( 'Disponibilita', 'gest-web-rent' ), 'manage_options', 'gwr-availability', array( __CLASS__, 'availability_page' ) );
-		add_submenu_page( 'gest-web-rent', __( 'Prenotazioni', 'gest-web-rent' ), __( 'Prenotazioni', 'gest-web-rent' ), 'manage_options', 'gwr-bookings', array( 'GWR_Bookings_Admin', 'list_page' ) );
-		add_submenu_page( null, __( 'Dettaglio prenotazione', 'gest-web-rent' ), __( 'Dettaglio prenotazione', 'gest-web-rent' ), 'manage_options', 'gwr-booking-detail', array( 'GWR_Bookings_Admin', 'detail_page' ) );
-		add_submenu_page( 'gest-web-rent', __( 'Documenti', 'gest-web-rent' ), __( 'Documenti', 'gest-web-rent' ), 'manage_options', 'gwr-documents', array( 'GWR_Documents_Admin', 'page' ) );
-		add_submenu_page( 'gest-web-rent', __( 'Comunicazioni', 'gest-web-rent' ), __( 'Comunicazioni', 'gest-web-rent' ), 'manage_options', 'gwr-communications', array( 'GWR_Notification_Service', 'admin_page' ) );
+		if ( ! gwr_is_booking_mode() || ( class_exists( 'GWR_Inquiries' ) && GWR_Inquiries::has_records() ) ) {
+			$inquiry_label = gwr_is_showcase_mode() ? __( 'Richieste informazioni', 'gest-web-rent' ) : __( 'Richieste', 'gest-web-rent' );
+			add_submenu_page( 'gest-web-rent', $inquiry_label, $inquiry_label, 'manage_options', 'gwr-inquiries', array( 'GWR_Inquiries', 'admin_page' ) );
+		}
+		if ( gwr_is_booking_mode() ) {
+			add_submenu_page( 'gest-web-rent', __( 'Prenotazioni', 'gest-web-rent' ), __( 'Prenotazioni', 'gest-web-rent' ), 'manage_options', 'gwr-bookings', array( 'GWR_Bookings_Admin', 'list_page' ) );
+			add_submenu_page( null, __( 'Dettaglio prenotazione', 'gest-web-rent' ), __( 'Dettaglio prenotazione', 'gest-web-rent' ), 'manage_options', 'gwr-booking-detail', array( 'GWR_Bookings_Admin', 'detail_page' ) );
+			add_submenu_page( 'gest-web-rent', __( 'Documenti', 'gest-web-rent' ), __( 'Documenti', 'gest-web-rent' ), 'manage_options', 'gwr-documents', array( 'GWR_Documents_Admin', 'page' ) );
+			add_submenu_page( 'gest-web-rent', __( 'Comunicazioni', 'gest-web-rent' ), __( 'Comunicazioni', 'gest-web-rent' ), 'manage_options', 'gwr-communications', array( 'GWR_Notification_Service', 'admin_page' ) );
+		} else {
+			foreach ( array( 'gwr-bookings', 'gwr-booking-detail', 'gwr-documents', 'gwr-communications', 'gwr-pricing', 'gwr-payments' ) as $disabled_page ) {
+				add_submenu_page( null, __( 'Funzione non attiva', 'gest-web-rent' ), __( 'Funzione non attiva', 'gest-web-rent' ), 'manage_options', $disabled_page, array( __CLASS__, 'feature_unavailable_page' ) );
+			}
+		}
 		add_submenu_page( 'gest-web-rent', __( 'Condizioni di noleggio', 'gest-web-rent' ), __( 'Condizioni di noleggio', 'gest-web-rent' ), 'manage_options', 'gwr-rental-terms', array( 'GWR_Rental_Terms_Admin', 'page' ) );
 		add_submenu_page( 'gest-web-rent', __( 'Impostazioni', 'gest-web-rent' ), __( 'Impostazioni', 'gest-web-rent' ), 'manage_options', 'gwr-settings', array( __CLASS__, 'settings_page' ) );
 	}
@@ -150,19 +167,26 @@ class GWR_Admin {
 		$input = is_array( $input ) ? wp_unslash( $input ) : array();
 		$existing = self::get_settings();
 		$output = array(
-			'dealer_name'         => isset( $input['dealer_name'] ) ? sanitize_text_field( $input['dealer_name'] ) : '',
-			'whatsapp_number'     => isset( $input['whatsapp_number'] ) ? preg_replace( '/\D+/', '', sanitize_text_field( $input['whatsapp_number'] ) ) : '',
-			'contact_email'       => isset( $input['contact_email'] ) ? sanitize_email( $input['contact_email'] ) : '',
-			'primary_color'       => isset( $input['primary_color'] ) ? sanitize_hex_color( $input['primary_color'] ) : '#173787',
-			'whatsapp_message'    => isset( $input['whatsapp_message'] ) ? sanitize_textarea_field( $input['whatsapp_message'] ) : '',
-			'email_subject'       => isset( $input['email_subject'] ) ? sanitize_text_field( $input['email_subject'] ) : '',
-			'email_body'          => isset( $input['email_body'] ) ? sanitize_textarea_field( $input['email_body'] ) : '',
-			'privacy_note'        => isset( $input['privacy_note'] ) ? sanitize_textarea_field( $input['privacy_note'] ) : '',
-			'booking_prefix'      => isset( $input['booking_prefix'] ) ? strtoupper( preg_replace( '/[^A-Z0-9]/', '', sanitize_text_field( $input['booking_prefix'] ) ) ) : 'GWR',
-			'pending_expiry_hours'=> isset( $input['pending_expiry_hours'] ) ? max( 1, min( 168, absint( $input['pending_expiry_hours'] ) ) ) : 24,
-			'privacy_version'     => isset( $input['privacy_version'] ) ? sanitize_text_field( $input['privacy_version'] ) : '1.0',
-			'privacy_url'         => isset( $input['privacy_url'] ) ? esc_url_raw( $input['privacy_url'] ) : '',
+			'dealer_name'         => isset( $input['dealer_name'] ) ? sanitize_text_field( $input['dealer_name'] ) : $existing['dealer_name'],
+			'whatsapp_number'     => isset( $input['whatsapp_number'] ) ? preg_replace( '/\D+/', '', sanitize_text_field( $input['whatsapp_number'] ) ) : $existing['whatsapp_number'],
+			'contact_email'       => isset( $input['contact_email'] ) ? sanitize_email( $input['contact_email'] ) : $existing['contact_email'],
+			'contact_phone'       => isset( $input['contact_phone'] ) ? preg_replace( '/[^0-9+ ]/', '', sanitize_text_field( $input['contact_phone'] ) ) : $existing['contact_phone'],
+			'primary_color'       => isset( $input['primary_color'] ) ? ( sanitize_hex_color( $input['primary_color'] ) ?: '#173787' ) : $existing['primary_color'],
+			'whatsapp_message'    => isset( $input['whatsapp_message'] ) ? sanitize_textarea_field( $input['whatsapp_message'] ) : $existing['whatsapp_message'],
+			'email_subject'       => isset( $input['email_subject'] ) ? sanitize_text_field( $input['email_subject'] ) : $existing['email_subject'],
+			'email_body'          => isset( $input['email_body'] ) ? sanitize_textarea_field( $input['email_body'] ) : $existing['email_body'],
+			'privacy_note'        => isset( $input['privacy_note'] ) ? sanitize_textarea_field( $input['privacy_note'] ) : $existing['privacy_note'],
+			'booking_prefix'      => isset( $input['booking_prefix'] ) ? strtoupper( preg_replace( '/[^A-Z0-9]/', '', sanitize_text_field( $input['booking_prefix'] ) ) ) : $existing['booking_prefix'],
+			'pending_expiry_hours'=> isset( $input['pending_expiry_hours'] ) ? max( 1, min( 168, absint( $input['pending_expiry_hours'] ) ) ) : $existing['pending_expiry_hours'],
+			'privacy_version'     => isset( $input['privacy_version'] ) ? sanitize_text_field( $input['privacy_version'] ) : $existing['privacy_version'],
+			'privacy_url'         => isset( $input['privacy_url'] ) ? esc_url_raw( $input['privacy_url'] ) : $existing['privacy_url'],
 			'github_access_token' => $existing['github_access_token'] ?? '',
+			'operation_mode'      => isset( $input['operation_mode'] ) && in_array( sanitize_key( $input['operation_mode'] ), GWR_Operation_Mode::modes(), true ) ? sanitize_key( $input['operation_mode'] ) : $existing['operation_mode'],
+			'save_information_requests' => array_key_exists( 'save_information_requests', $input ) ? ( ! empty( $input['save_information_requests'] ) ? 1 : 0 ) : absint( $existing['save_information_requests'] ),
+			'public_availability_mode' => self::sanitize_choice( $input['public_availability_mode'] ?? $existing['public_availability_mode'], array( 'status', 'calendar', 'contact', 'hidden' ), 'status' ),
+			'showcase_price_mode' => self::sanitize_choice( $input['showcase_price_mode'] ?? $existing['showcase_price_mode'], array( 'daily', 'total', 'from', 'request', 'hidden' ), 'daily' ),
+			'pending_request_block_mode' => self::sanitize_choice( $input['pending_request_block_mode'] ?? $existing['pending_request_block_mode'], array( 'no', 'hours', 'manual' ), 'no' ),
+			'pending_request_block_hours' => isset( $input['pending_request_block_hours'] ) ? max( 1, min( 168, absint( $input['pending_request_block_hours'] ) ) ) : absint( $existing['pending_request_block_hours'] ),
 		);
 
 		if ( ! empty( $input['github_access_token_clear'] ) ) {
@@ -190,6 +214,18 @@ class GWR_Admin {
 	public static function dashboard_page() {
 		$counts = GWR_CPT::counts();
 		$settings = self::get_settings();
+		$dashboard_actions = array(
+			array( 'label' => __( 'Aggiungi veicolo', 'gest-web-rent' ), 'url' => self::vehicle_edit_url(), 'primary' => true ),
+			array( 'label' => __( 'Gestisci veicoli', 'gest-web-rent' ), 'url' => self::vehicles_url() ),
+			array( 'label' => __( 'Disponibilita', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-availability' ) ),
+		);
+		if ( gwr_is_booking_mode() ) {
+			$dashboard_actions[] = array( 'label' => __( 'Prenotazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-bookings' ) );
+			$dashboard_actions[] = array( 'label' => __( 'Tariffe', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-pricing' ) );
+		} else {
+			$dashboard_actions[] = array( 'label' => gwr_is_showcase_mode() ? __( 'Richieste informazioni', 'gest-web-rent' ) : __( 'Richieste ricevute', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-inquiries' ) );
+		}
+		$dashboard_actions[] = array( 'label' => __( 'Impostazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-settings' ) );
 		$github_summary = class_exists( 'GWR_GitHub_Updater' ) ? GWR_GitHub_Updater::summary() : array();
 		$github_release = class_exists( 'GWR_GitHub_Updater' ) ? GWR_GitHub_Updater::latest_release() : null;
 		$github_error = is_wp_error( $github_release ) ? $github_release->get_error_message() : ( class_exists( 'GWR_GitHub_Updater' ) ? GWR_GitHub_Updater::last_error() : '' );
@@ -198,14 +234,11 @@ class GWR_Admin {
 			'dashboard',
 			__( 'Dashboard Gest Web Rent', 'gest-web-rent' ),
 			__( 'Pannello vetrina per noleggio veicoli: catalogo, contatti, disponibilita e schede in overlay.', 'gest-web-rent' ),
-			array(
-				array( 'label' => __( 'Aggiungi veicolo', 'gest-web-rent' ), 'url' => self::vehicle_edit_url(), 'primary' => true ),
-				array( 'label' => __( 'Gestisci veicoli', 'gest-web-rent' ), 'url' => self::vehicles_url() ),
-				array( 'label' => __( 'Impostazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-settings' ) ),
-			)
+			$dashboard_actions
 		);
 
 		self::admin_notice();
+		self::render_operation_mode_settings( $settings, true );
 
 		echo '<div class="gwr-kpi-grid">';
 		self::metric_card( __( 'Veicoli totali', 'gest-web-rent' ), $counts['total'], __( 'Archivio noleggio interno', 'gest-web-rent' ) );
@@ -663,11 +696,14 @@ class GWR_Admin {
 	 * @return void
 	 */
 	private static function settings_sections( $settings ) {
+		self::render_operation_mode_settings( $settings, false );
+
 		self::section_open( __( 'Contatti concessionario', 'gest-web-rent' ), __( 'Usati dal catalogo e dal modal veicolo.', 'gest-web-rent' ) );
 		echo '<div class="gwr-field-grid">';
 		self::setting_field( 'dealer_name', __( 'Nome concessionario', 'gest-web-rent' ), $settings['dealer_name'] );
 		self::setting_field( 'whatsapp_number', __( 'Numero WhatsApp Business', 'gest-web-rent' ), $settings['whatsapp_number'], 'text', '393331234567' );
 		self::setting_field( 'contact_email', __( 'Email concessionario', 'gest-web-rent' ), $settings['contact_email'], 'email', 'noleggio@example.com' );
+		self::setting_field( 'contact_phone', __( 'Telefono concessionario', 'gest-web-rent' ), $settings['contact_phone'], 'tel', '+39 333 1234567' );
 		self::setting_field( 'primary_color', __( 'Colore primario', 'gest-web-rent' ), $settings['primary_color'], 'color' );
 		echo '</div>';
 		self::section_close();
@@ -681,7 +717,21 @@ class GWR_Admin {
 		echo '</div>';
 		self::section_close();
 
-		self::section_open( __( 'Prenotazioni', 'gest-web-rent' ), __( 'Codice pratica, scadenza delle richieste in attesa e versione informativa privacy.', 'gest-web-rent' ) );
+		self::section_open( __( 'Richieste e disponibilita pubblica', 'gest-web-rent' ), __( 'Configura cosa mostrare in vetrina e se le richieste in valutazione devono creare un blocco.', 'gest-web-rent' ) );
+		echo '<div class="gwr-field-grid gwr-field-grid--triple">';
+		self::setting_select( 'public_availability_mode', __( 'Disponibilita pubblica', 'gest-web-rent' ), $settings['public_availability_mode'], array( 'status' => __( 'Disponibile / non disponibile', 'gest-web-rent' ), 'calendar' => __( 'Calendario', 'gest-web-rent' ), 'contact' => __( 'Solo Contattaci', 'gest-web-rent' ), 'hidden' => __( 'Nascosta', 'gest-web-rent' ) ) );
+		self::setting_select( 'showcase_price_mode', __( 'Prezzi in vetrina', 'gest-web-rent' ), $settings['showcase_price_mode'], array( 'daily' => __( 'Prezzo giornaliero', 'gest-web-rent' ), 'total' => __( 'Totale periodo', 'gest-web-rent' ), 'from' => __( 'A partire da', 'gest-web-rent' ), 'request' => __( 'Prezzo su richiesta', 'gest-web-rent' ), 'hidden' => __( 'Nascondi prezzi', 'gest-web-rent' ) ) );
+		self::setting_select( 'pending_request_block_mode', __( 'Blocco richieste in attesa', 'gest-web-rent' ), $settings['pending_request_block_mode'], array( 'no' => __( 'No', 'gest-web-rent' ), 'hours' => __( 'Si, per un numero di ore', 'gest-web-rent' ), 'manual' => __( 'Si, fino alla gestione manuale', 'gest-web-rent' ) ) );
+		self::setting_field( 'pending_request_block_hours', __( 'Durata blocco temporaneo (ore)', 'gest-web-rent' ), $settings['pending_request_block_hours'], 'number', '24' );
+		echo '<input type="hidden" name="' . esc_attr( self::OPTION_NAME ) . '[save_information_requests]" value="0" /><label class="gwr-check-card"><input type="checkbox" name="' . esc_attr( self::OPTION_NAME ) . '[save_information_requests]" value="1" ' . checked( ! empty( $settings['save_information_requests'] ), true, false ) . ' /><span>' . esc_html__( 'Salva richieste informazioni nel pannello', 'gest-web-rent' ) . '</span></label>';
+		echo '</div>';
+		self::section_close();
+
+		if ( gwr_is_booking_mode() ) {
+			self::section_open( __( 'Prenotazioni online', 'gest-web-rent' ), __( 'Codice pratica, scadenza delle richieste in attesa e versione informativa privacy.', 'gest-web-rent' ) );
+		} else {
+			self::section_open( __( 'Privacy e richieste', 'gest-web-rent' ), __( 'Impostazioni condivise dai moduli pubblici.', 'gest-web-rent' ) );
+		}
 		echo '<div class="gwr-field-grid gwr-field-grid--triple">';
 		self::setting_field( 'booking_prefix', __( 'Prefisso prenotazione', 'gest-web-rent' ), $settings['booking_prefix'], 'text', 'GWR' );
 		self::setting_field( 'pending_expiry_hours', __( 'Scadenza richieste (ore)', 'gest-web-rent' ), $settings['pending_expiry_hours'], 'number', '24' );
@@ -693,6 +743,53 @@ class GWR_Admin {
 		self::section_open( __( 'Aggiornamenti GitHub', 'gest-web-rent' ), __( 'Per repository pubbliche non serve token. Per repository private usa un token lato server.', 'gest-web-rent' ) );
 		self::github_token_field( $settings );
 		self::section_close();
+	}
+
+	/** Render the prominent, single-source operation mode selector. */
+	private static function render_operation_mode_settings( $settings, $standalone ) {
+		$mode         = sanitize_key( $settings['operation_mode'] ?? gwr_get_operation_mode() );
+		$descriptions = array(
+			'showcase' => __( 'Mostra veicoli, disponibilita e dettagli. I clienti contattano il noleggiatore senza creare prenotazioni o pagamenti.', 'gest-web-rent' ),
+			'request'  => __( 'Il cliente invia una richiesta con date e contatti. La conferma viene gestita manualmente dal pannello.', 'gest-web-rent' ),
+			'booking'  => __( 'Il cliente completa la prenotazione e puo pagare online quando un metodo valido e configurato.', 'gest-web-rent' ),
+		);
+		$features = array(
+			'showcase' => __( 'Catalogo, dettaglio, WhatsApp, email e modulo informazioni. Checkout e pagamenti disattivati.', 'gest-web-rent' ),
+			'request'  => __( 'Richieste salvate con stato Da valutare. Nessun pagamento online e blocco disponibilita configurabile.', 'gest-web-rent' ),
+			'booking'  => __( 'Configuratore completo, prenotazioni, documenti e metodi di pagamento configurati.', 'gest-web-rent' ),
+		);
+
+		if ( $standalone ) {
+			echo '<form method="post" action="options.php" class="gwr-operation-mode-form" onsubmit="return window.confirm(\'' . esc_js( __( 'Confermi il cambio modalita? I dati esistenti resteranno salvati, ma le funzioni non pertinenti verranno disattivate.', 'gest-web-rent' ) ) . '\');">';
+			settings_fields( 'gwr_settings_group' );
+		}
+		echo '<section class="gwr-operation-mode"><div class="gwr-operation-mode__head"><div><span>' . esc_html__( 'Configurazione principale', 'gest-web-rent' ) . '</span><h2>' . esc_html__( 'Modalita di utilizzo del plugin', 'gest-web-rent' ) . '</h2><p>' . esc_html__( 'La modalita scelta modifica realmente frontend, endpoint, menu e servizi caricati. Nessun dato esistente viene eliminato.', 'gest-web-rent' ) . '</p></div><strong>' . esc_html( sprintf( __( 'Modalita attiva: %s', 'gest-web-rent' ), GWR_Operation_Mode::labels()[ $mode ] ?? $mode ) ) . '</strong></div><div class="gwr-operation-mode__grid">';
+		foreach ( GWR_Operation_Mode::labels() as $value => $label ) {
+			$active = $mode === $value;
+			echo '<label class="gwr-operation-card' . ( $active ? ' is-active' : '' ) . '"><input type="radio" name="' . esc_attr( self::OPTION_NAME ) . '[operation_mode]" value="' . esc_attr( $value ) . '" ' . checked( $active, true, false ) . ' /><span class="gwr-operation-card__check" aria-hidden="true"></span><strong>' . esc_html( $label ) . '</strong><p>' . esc_html( $descriptions[ $value ] ) . '</p><small>' . esc_html( $features[ $value ] ) . '</small></label>';
+		}
+		echo '</div>';
+		if ( $standalone ) {
+			echo '<div class="gwr-form-submit"><button class="button button-primary">' . esc_html__( 'Salva modalita', 'gest-web-rent' ) . '</button></div>';
+		}
+		echo '</section>';
+		if ( $standalone ) {
+			echo '</form>';
+		}
+	}
+
+	/** Render a safe direct-access message for disabled admin modules. */
+	public static function feature_unavailable_page() {
+		self::require_admin_capability();
+		self::page_start( 'settings', __( 'Funzione non attiva', 'gest-web-rent' ), __( 'Questa funzione non e attiva nella modalita corrente.', 'gest-web-rent' ), array( array( 'label' => __( 'Configura modalita', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-settings' ), 'primary' => true ) ) );
+		echo '<section class="gwr-data-grid-card"><h2>' . esc_html__( 'I dati esistenti sono al sicuro', 'gest-web-rent' ) . '</h2><p>' . esc_html__( 'Cambiare modalita non elimina prenotazioni, pagamenti, documenti o richieste. Riattiva la modalita necessaria per accedere alla funzione.', 'gest-web-rent' ) . '</p></section>';
+		self::page_end();
+	}
+
+	/** Sanitize one value against a strict allowlist. */
+	private static function sanitize_choice( $value, $allowed, $default ) {
+		$value = sanitize_key( $value );
+		return in_array( $value, $allowed, true ) ? $value : $default;
 	}
 
 	/**
@@ -740,14 +837,21 @@ class GWR_Admin {
 			'vehicles'     => array( 'label' => __( 'Veicoli', 'gest-web-rent' ), 'url' => self::vehicles_url() ),
 			'add'          => array( 'label' => __( 'Aggiungi veicolo', 'gest-web-rent' ), 'url' => self::vehicle_edit_url() ),
 			'availability' => array( 'label' => __( 'Disponibilita', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-availability' ) ),
-			'bookings'     => array( 'label' => __( 'Prenotazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-bookings' ) ),
-			'documents'    => array( 'label' => __( 'Documenti', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-documents' ) ),
-			'communications' => array( 'label' => __( 'Comunicazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-communications' ) ),
-			'pricing'      => array( 'label' => __( 'Tariffe', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-pricing' ) ),
-			'payments'     => array( 'label' => __( 'Pagamenti', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-payments' ) ),
 			'terms'        => array( 'label' => __( 'Condizioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-rental-terms' ) ),
 			'settings'     => array( 'label' => __( 'Impostazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-settings' ) ),
 		);
+		if ( ! gwr_is_booking_mode() || ( class_exists( 'GWR_Inquiries' ) && GWR_Inquiries::has_records() ) ) {
+			$items = array_slice( $items, 0, 4, true ) + array( 'inquiries' => array( 'label' => gwr_is_showcase_mode() ? __( 'Richieste informazioni', 'gest-web-rent' ) : __( 'Richieste', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-inquiries' ) ) ) + array_slice( $items, 4, null, true );
+		}
+		if ( gwr_is_booking_mode() ) {
+			$items = array_slice( $items, 0, 4, true ) + array(
+				'bookings'       => array( 'label' => __( 'Prenotazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-bookings' ) ),
+				'documents'      => array( 'label' => __( 'Documenti', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-documents' ) ),
+				'communications' => array( 'label' => __( 'Comunicazioni', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-communications' ) ),
+				'pricing'        => array( 'label' => __( 'Tariffe', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-pricing' ) ),
+				'payments'       => array( 'label' => __( 'Pagamenti', 'gest-web-rent' ), 'url' => admin_url( 'admin.php?page=gwr-payments' ) ),
+			) + array_slice( $items, 4, null, true );
+		}
 
 		echo '<nav class="gwr-admin-nav"><div class="gwr-admin-nav__brand"><div class="gwr-admin-nav__logo">Gest<span>Web</span>Rent</div><span class="gwr-admin-nav__caption">' . esc_html__( 'Rental suite', 'gest-web-rent' ) . '</span></div><div class="gwr-admin-nav__links">';
 		foreach ( $items as $key => $item ) {
@@ -981,6 +1085,15 @@ class GWR_Admin {
 	 */
 	private static function setting_field( $key, $label, $value, $type = 'text', $placeholder = '' ) {
 		echo '<label class="gwr-field"><span class="gwr-field__label">' . esc_html( $label ) . '</span><input type="' . esc_attr( $type ) . '" name="' . esc_attr( self::OPTION_NAME ) . '[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '" placeholder="' . esc_attr( $placeholder ) . '" /></label>';
+	}
+
+	/** Render an allowlisted select setting. */
+	private static function setting_select( $key, $label, $value, $options ) {
+		echo '<label class="gwr-field"><span class="gwr-field__label">' . esc_html( $label ) . '</span><select name="' . esc_attr( self::OPTION_NAME ) . '[' . esc_attr( $key ) . ']">';
+		foreach ( $options as $option_value => $option_label ) {
+			echo '<option value="' . esc_attr( $option_value ) . '" ' . selected( $value, $option_value, false ) . '>' . esc_html( $option_label ) . '</option>';
+		}
+		echo '</select></label>';
 	}
 
 	/**

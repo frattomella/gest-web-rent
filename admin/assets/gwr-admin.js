@@ -343,4 +343,13 @@
     canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
     output.value = '';
   });
+
+  $(document).on('change', '.gwr-operation-card input[type="radio"]', function () {
+    var grid = this.closest('.gwr-operation-mode__grid');
+    if (!grid) return;
+    grid.querySelectorAll('.gwr-operation-card').forEach(function (card) {
+      var input = card.querySelector('input[type="radio"]');
+      card.classList.toggle('is-active', !!input && input.checked);
+    });
+  });
 })(jQuery);

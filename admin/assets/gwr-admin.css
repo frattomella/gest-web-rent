@@ -12,6 +12,75 @@
   color: var(--gwr-ink);
 }
 
+.gwr-operation-mode-form { margin: 0 0 24px; }
+
+.gwr-operation-mode {
+  margin: 0 0 24px;
+  padding: clamp(22px, 3vw, 34px);
+  border: 1px solid #d9e2f0;
+  border-radius: 24px;
+  background: linear-gradient(145deg, #fff 0%, #f5f8ff 100%);
+  box-shadow: 0 14px 38px rgba(22, 45, 91, .08);
+}
+
+.gwr-operation-mode__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.gwr-operation-mode__head span {
+  color: #2852a3;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.gwr-operation-mode__head h2 { margin: 7px 0 8px; font-size: clamp(23px, 3vw, 32px); }
+.gwr-operation-mode__head p { max-width: 760px; margin: 0; color: #5d6980; line-height: 1.6; }
+.gwr-operation-mode__head > strong { flex: 0 0 auto; padding: 9px 13px; border-radius: 999px; background: #e9f0ff; color: #173787; }
+
+.gwr-operation-mode__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.gwr-operation-card {
+  position: relative;
+  display: grid;
+  gap: 9px;
+  min-height: 190px;
+  padding: 22px;
+  border: 1px solid #d7dfec;
+  border-radius: 18px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.gwr-operation-card:hover { transform: translateY(-2px); border-color: #8ea9dc; box-shadow: 0 12px 28px rgba(23, 55, 135, .1); }
+.gwr-operation-card.is-active { border-color: #2852a3; box-shadow: inset 0 0 0 1px #2852a3, 0 12px 30px rgba(23, 55, 135, .12); }
+.gwr-operation-card input { position: absolute; opacity: 0; pointer-events: none; }
+.gwr-operation-card__check { width: 20px; height: 20px; border: 2px solid #a9b7ce; border-radius: 50%; }
+.gwr-operation-card.is-active .gwr-operation-card__check { border: 6px solid #2852a3; }
+.gwr-operation-card > strong { color: #14213a; font-size: 17px; }
+.gwr-operation-card p { margin: 0; color: #56637a; line-height: 1.5; }
+.gwr-operation-card small { align-self: end; color: #758199; line-height: 1.45; }
+
+@media (max-width: 960px) {
+  .gwr-operation-mode__grid { grid-template-columns: 1fr; }
+  .gwr-operation-card { min-height: 0; }
+}
+
+@media (max-width: 600px) {
+  .gwr-operation-mode__head { display: grid; }
+  .gwr-operation-mode__head > strong { justify-self: start; }
+}
+
 .gwr-admin-shell {
   display: grid;
   gap: 22px;

@@ -1,9 +1,10 @@
-# Gest Web Rent v1.9.2
+# Gest Web Rent v2.0.0
 
-Questa patch rende il caricamento del dettaglio indipendente dagli errori dei servizi commerciali secondari.
+Questa release corregge definitivamente il caricamento del dettaglio veicolo e introduce tre modalita operative reali.
 
-- Il veicolo viene mostrato anche se prezzo, disponibilita o periodo non possono essere calcolati.
-- Fallback sicuro al payload essenziale quando le condizioni commerciali estese non sono disponibili.
-- Risposta AJAX protetta da warning PHP e output inatteso.
-- Messaggio di errore non duplicato e gestione specifica della sessione scaduta.
+- Dettaglio on demand tramite route REST pubblica read-only, non dipendente dai nonce delle pagine cache.
+- Modalita Vetrina, Richiesta di prenotazione e Prenotazione online selezionabili dalla dashboard.
+- Modulo richieste leggero con archivio amministrativo e blocco disponibilita opzionale.
+- Endpoint, menu, servizi, pagamenti e cron attivati esclusivamente quando pertinenti.
+- Nessuna cancellazione di prenotazioni, pagamenti, documenti o richieste durante il cambio modalita.
 - Asset ufficiale `gest-web-rent.zip` con cartella radice corretta per WordPress.

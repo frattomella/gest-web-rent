@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.2
+Stable tag: 2.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -17,6 +17,7 @@ Gest Web Rent permette di creare e gestire veicoli a noleggio senza usare l'edit
 Funzionalita principali:
 
 * Dashboard amministrativa in stile GestPark Online.
+* Modalita Vetrina, Richiesta di prenotazione e Prenotazione online selezionabili dalla dashboard.
 * Gestione veicoli tramite form custom.
 * Condizioni di noleggio globali con override per singolo veicolo.
 * Coperture, franchigie, deposito, requisiti, documenti, politiche, extra e FAQ configurabili.
@@ -75,6 +76,14 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 2.0.0 =
+* Reso il dettaglio veicolo indipendente dai nonce presenti nelle pagine cache tramite route REST pubblica read-only e rate limit.
+* Centralizzati ID card, payload dettaglio, parser risposta, loading, retry e annullamento delle richieste concorrenti.
+* Aggiunte modalita operative Vetrina, Richiesta di prenotazione e Prenotazione online con menu, endpoint e servizi condizionali.
+* Aggiunto archivio richieste clienti con stato Da valutare, notifiche email e blocco disponibilita opzionale.
+* Stripe, pagamenti, checkout, documenti e area cliente vengono inizializzati esclusivamente in modalita Prenotazione online.
+* Conservati prenotazioni, pagamenti, documenti e richieste durante ogni cambio modalita.
 
 = 1.9.2 =
 * Il dettaglio veicolo non viene piu bloccato da errori secondari di prezzo, disponibilita o periodo.

@@ -1,6 +1,6 @@
 # Gest Web Rent
 
-Gest Web Rent e un plugin WordPress vetrina per noleggio veicoli. Gestisce veicoli, foto, indisponibilita, contatti WhatsApp Business/email e un catalogo frontend responsive con dettagli in overlay.
+Gest Web Rent e un plugin WordPress per noleggio veicoli configurabile come vetrina, sistema di richieste manuali o piattaforma di prenotazione online. Gestisce veicoli, foto, indisponibilita, contatti e un catalogo responsive con dettagli in overlay.
 
 Il plugin non usa l'editor WordPress come esperienza principale per creare veicoli: la gestione e interna, con form custom e tabelle dedicate.
 
@@ -47,15 +47,22 @@ Sottomenu:
 - Veicoli
 - Aggiungi veicolo
 - Disponibilita
-- Prenotazioni
-- Documenti
-- Tariffe
-- Pagamenti
-- Comunicazioni
+- Richieste informazioni oppure Prenotazioni, secondo la modalita attiva
+- Documenti, Tariffe, Pagamenti e Comunicazioni in modalita Prenotazione online
 - Condizioni di noleggio
 - Impostazioni
 
 La dashboard mostra riepilogo veicoli, veicoli attivi, veicoli in evidenza, blocchi futuri, stato WhatsApp/email e shortcode catalogo.
+
+## Modalita Operative
+
+Dalla dashboard o da **Gest Web Rent > Impostazioni** puoi scegliere una sola modalita:
+
+- **Vetrina e richieste di informazioni**: catalogo, disponibilita, dettaglio e contatti; nessuna prenotazione o pagamento viene creato.
+- **Richiesta di prenotazione**: salva una richiesta `Da valutare`, invia le notifiche e non avvia pagamenti. Il blocco temporaneo del veicolo e opzionale e disattivato per impostazione predefinita.
+- **Prenotazione online**: mantiene configuratore, prenotazioni, documenti e metodi di pagamento. Stripe resta opzionale e viene mostrato solo con configurazione valida.
+
+Il cambio modalita non elimina prenotazioni, pagamenti, documenti o richieste gia presenti. Le funzioni non pertinenti non vengono registrate nel menu e gli URL amministrativi diretti mostrano un avviso sicuro.
 
 ## Creare Un Veicolo
 
@@ -144,6 +151,7 @@ Il catalogo include:
 - gallery foto;
 - info noleggio complete;
 - pulsanti WhatsApp/email con date selezionate.
+- modulo informazioni o richiesta coerente con la modalita scelta.
 
 Non esistono piu come esperienza pubblica centrale:
 
@@ -197,5 +205,5 @@ Ogni release deve aggiornare:
 Release corrente:
 
 ```text
-1.9.2
+2.0.0
 ```

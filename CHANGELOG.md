@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.0
+
+- Corretto definitivamente il caricamento del dettaglio veicolo sostituendo il nonce pubblico soggetto a cache con una route REST read-only, validata e rate limited.
+- Centralizzati ID `data-gwr-vehicle-id`, listener delegato sui risultati, normalizzazione risposta, loading, retry, cache contestuale e protezione dalle risposte obsolete.
+- Aggiunte modalita operative `showcase`, `request` e `booking` con helper condivisi e default retrocompatibile sicuro.
+- Aggiunta selezione visuale della modalita in dashboard e impostazioni, con menu e accessi diretti coerenti.
+- Aggiunto modulo leggero per informazioni e richieste di prenotazione senza pagamento, con tabella dedicata, stato `pending_review`, email e azioni amministrative.
+- Aggiunto blocco disponibilita per richieste configurabile: disattivato, temporaneo o fino alla gestione manuale.
+- Resi condizionali endpoint, webhook, cron e servizi di prenotazione, pagamenti, documenti e portale cliente.
+- Mantenuti intatti dati e tabelle esistenti durante il cambio modalita.
+- Verificati lint PHP/JavaScript, struttura ZIP WordPress e asset release `gest-web-rent.zip`.
+
 ## 1.9.2
 
 - Corretto il caricamento del dettaglio quando tariffazione, disponibilita o validazione del periodo non sono disponibili.

@@ -319,6 +319,157 @@ class GWR_Bookings {
 		return $booking;
 	}
 
+	/** Convert a reviewed lightweight request into a real pending booking. */
+	public static function create_from_inquiry( $inquiry ) {
+		global $wpdb;
+		$inquiry = is_array( $inquiry ) ? $inquiry : array();
+		$vehicle = GWR_CPT::get_vehicle( absint( $inquiry['vehicle_id'] ?? 0 ) );
+		if ( ! $vehicle || 'active' !== ( $vehicle['status'] ?? '' ) ) {
+			return new WP_Error( 'gwr_vehicle_invalid', __( 'Il veicolo selezionato non e disponibile.', 'gest-web-rent' ) );
+		}
+		$settings = GWR_Admin::get_settings();
+		$location = sanitize_text_field( $vehicle['location'] ?? '' );
+		if ( ! $location ) {
+			$location = sanitize_text_field( $settings['dealer_name'] ?? '' );
+		}
+		if ( ! $location ) {
+			$location = __( 'Da definire', 'gest-web-rent' );
+		}
+		$period = self::normalize_period(
+			array(
+				'start_date'      => sanitize_text_field( $inquiry['start_date'] ?? '' ),
+				'end_date'        => sanitize_text_field( $inquiry['end_date'] ?? '' ),
+				'pickup_time'     => sanitize_text_field( ! empty( $inquiry['pickup_time'] ) ? $inquiry['pickup_time'] : '09:00' ),
+				'return_time'     => sanitize_text_field( ! empty( $inquiry['return_time'] ) ? $inquiry['return_time'] : '18:00' ),
+				'pickup_location' => $location,
+				'return_location' => $location,
+			)
+		);
+		if ( is_wp_error( $period ) ) {
+			return $period;
+		}
+		$selection = json_decode( (string) ( $inquiry['selection_json'] ?? '' ), true );
+		$selection = is_array( $selection ) ? array_replace( array( 'extras' => array(), 'coverages' => array() ), $selection ) : array( 'extras' => array(), 'coverages' => array() );
+		$terms     = GWR_Rental_Terms::public_payload( absint( $vehicle['id'] ), $vehicle );
+		$price     = self::calculate_price( $vehicle, $period, $selection, array(), $terms, array( 'customer_email' => sanitize_email( $inquiry['email'] ?? '' ), 'payment_method' => 'request' ) );
+		if ( is_wp_error( $price ) ) {
+			return $price;
+		}
+
+		$vehicle_id     = absint( $vehicle['id'] );
+		$availability_id = absint( $inquiry['availability_id'] ?? 0 );
+		$lock           = self::acquire_vehicle_lock( $vehicle_id );
+		if ( is_wp_error( $lock ) ) {
+			return $lock;
+		}
+		$booking_id   = 0;
+		$public_token = self::generate_public_token();
+		try {
+			$wpdb->query( 'START TRANSACTION' );
+			$manual_sql  = 'SELECT COUNT(*) FROM ' . GWR_CPT::availability_table() . ' WHERE vehicle_id=%d AND start_date <= %s AND end_date >= %s';
+			$manual_args = array( $vehicle_id, substr( $period['return_mysql'], 0, 10 ), substr( $period['pickup_mysql'], 0, 10 ) );
+			if ( $availability_id ) {
+				$manual_sql   .= ' AND id <> %d';
+				$manual_args[] = $availability_id;
+			}
+			$statuses     = self::blocking_statuses();
+			$placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+			$booking_sql  = 'SELECT COUNT(*) FROM ' . self::table() . " WHERE vehicle_id=%d AND status IN ({$placeholders}) AND pickup_datetime < %s AND return_datetime > %s";
+			$booking_args = array_merge( array( $vehicle_id ), $statuses, array( $period['return_mysql'], $period['pickup_mysql'] ) );
+			if ( (int) $wpdb->get_var( $wpdb->prepare( $manual_sql, $manual_args ) ) || (int) $wpdb->get_var( $wpdb->prepare( $booking_sql, $booking_args ) ) ) {
+				throw new Exception( __( 'Il veicolo non e piu disponibile nel periodo richiesto.', 'gest-web-rent' ) );
+			}
+
+			$now        = current_time( 'mysql' );
+			$expiry     = max( 1, min( 168, absint( $settings['pending_expiry_hours'] ?? 24 ) ) );
+			$token_days = class_exists( 'GWR_Notification_Service' ) ? max( 1, min( 730, absint( GWR_Notification_Service::settings()['portal_token_days'] ?? 365 ) ) ) : 365;
+			$customer   = array(
+				'customer_type' => 'company' === ( $inquiry['customer_type'] ?? '' ) ? 'company' : 'private',
+				'first_name'    => sanitize_text_field( $inquiry['first_name'] ?? '' ),
+				'last_name'     => sanitize_text_field( $inquiry['last_name'] ?? '' ),
+				'email'         => sanitize_email( $inquiry['email'] ?? '' ),
+				'phone'         => sanitize_text_field( $inquiry['phone'] ?? '' ),
+				'notes'         => sanitize_textarea_field( $inquiry['message'] ?? '' ),
+			);
+			$data = array(
+				'booking_code'            => 'TMP-' . wp_generate_uuid4(),
+				'vehicle_id'              => $vehicle_id,
+				'availability_id'         => $availability_id ?: null,
+				'status'                  => 'pending',
+				'pickup_location'         => $location,
+				'return_location'         => $location,
+				'pickup_datetime'         => $period['pickup_mysql'],
+				'return_datetime'         => $period['return_mysql'],
+				'rental_days'             => $period['days'],
+				'currency'                => $price['currency'],
+				'base_amount'             => self::minor_to_decimal( $price['base_minor'] ),
+				'extras_amount'           => self::minor_to_decimal( $price['extras_minor'] ),
+				'coverages_amount'        => self::minor_to_decimal( $price['coverages_minor'] ),
+				'supplements_amount'      => self::minor_to_decimal( $price['supplements_minor'] ),
+				'discounts_amount'        => self::minor_to_decimal( $price['discounts_minor'] ),
+				'taxes_amount'            => self::minor_to_decimal( $price['taxes_minor'] ),
+				'total_amount'            => self::minor_to_decimal( $price['total_minor'] ),
+				'deposit_amount'          => self::minor_to_decimal( $price['deposit_minor'] ),
+				'pay_now_amount'          => 0,
+				'pay_later_amount'        => self::minor_to_decimal( $price['total_minor'] ),
+				'payment_method'          => 'request',
+				'payment_status'          => 'not_required',
+				'pricing_snapshot_json'   => wp_json_encode( $price ),
+				'public_token_hash'       => self::hash_public_token( $public_token ),
+				'public_token_expires_at' => ( new DateTimeImmutable( 'now', wp_timezone() ) )->modify( '+' . $token_days . ' days' )->format( 'Y-m-d H:i:s' ),
+				'public_token_created_at' => $now,
+				'customer_type'           => $customer['customer_type'],
+				'customer_email'          => $customer['email'],
+				'customer_phone'          => $customer['phone'],
+				'customer_data_json'      => wp_json_encode( $customer ),
+				'driver_data_json'        => wp_json_encode( array() ),
+				'selection_json'          => wp_json_encode( $selection ),
+				'terms_snapshot_json'     => wp_json_encode( self::snapshot( $vehicle, $terms, $price ) ),
+				'privacy_version'         => sanitize_text_field( $settings['privacy_version'] ?? GWR_VERSION ),
+				'privacy_accepted_at'     => sanitize_text_field( $inquiry['privacy_accepted_at'] ?? $now ),
+				'terms_accepted_at'       => sanitize_text_field( $inquiry['terms_accepted_at'] ?? $now ),
+				'customer_notes'          => $customer['notes'],
+				'expires_at'              => ( new DateTimeImmutable( 'now', wp_timezone() ) )->modify( '+' . $expiry . ' hours' )->format( 'Y-m-d H:i:s' ),
+				'created_at'              => $now,
+				'updated_at'              => $now,
+			);
+			if ( false === $wpdb->insert( self::table(), $data ) ) {
+				throw new Exception( __( 'Impossibile creare la prenotazione dalla richiesta.', 'gest-web-rent' ) );
+			}
+			$booking_id = (int) $wpdb->insert_id;
+			$code       = self::generate_code( $booking_id, $settings['booking_prefix'] ?? 'GWR' );
+			if ( false === $wpdb->update( self::table(), array( 'booking_code' => $code ), array( 'id' => $booking_id ), array( '%s' ), array( '%d' ) ) ) {
+				throw new Exception( __( 'Impossibile generare il codice prenotazione.', 'gest-web-rent' ) );
+			}
+			self::insert_items( $booking_id, $price['items'] );
+			if ( $availability_id ) {
+				$saved_availability = GWR_CPT::save_availability( $vehicle_id, array( 'start_date' => substr( $period['pickup_mysql'], 0, 10 ), 'end_date' => substr( $period['return_mysql'], 0, 10 ), 'status' => 'reserved', 'internal_note' => __( 'Blocco collegato a prenotazione.', 'gest-web-rent' ), 'external_reference' => 'booking:' . $code ), $availability_id );
+				if ( is_wp_error( $saved_availability ) ) {
+					throw new Exception( $saved_availability->get_error_message() );
+				}
+			} else {
+				$availability_id = self::create_availability_block( $booking_id, $code, $vehicle_id, $period );
+				if ( $availability_id && false === $wpdb->update( self::table(), array( 'availability_id' => $availability_id ), array( 'id' => $booking_id ), array( '%d' ), array( '%d' ) ) ) {
+					throw new Exception( __( 'Impossibile collegare il blocco disponibilita.', 'gest-web-rent' ) );
+				}
+			}
+			if ( ! $availability_id ) {
+				throw new Exception( __( 'Impossibile bloccare il periodo selezionato.', 'gest-web-rent' ) );
+			}
+			self::add_log( $booking_id, 'converted_from_inquiry', '', 'pending', __( 'Prenotazione creata da richiesta cliente.', 'gest-web-rent' ) );
+			$wpdb->query( 'COMMIT' );
+		} catch ( Exception $exception ) {
+			$wpdb->query( 'ROLLBACK' );
+			self::release_vehicle_lock( $vehicle_id );
+			return new WP_Error( 'gwr_inquiry_conversion_failed', $exception->getMessage() );
+		}
+		self::release_vehicle_lock( $vehicle_id );
+		$booking                 = self::get( $booking_id );
+		$booking['public_token'] = $public_token;
+		self::send_notifications( $booking );
+		return $booking;
+	}
+
 	/** Sanitize booking request and required consents. */
 	public static function sanitize_request( $raw ) {
 		$raw = is_array( $raw ) ? wp_unslash( $raw ) : array();

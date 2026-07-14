@@ -14,6 +14,78 @@
   box-sizing: border-box;
 }
 
+/* Lightweight showcase/request flow. */
+.gwr-inquiry-flow {
+  display: grid;
+  gap: 22px;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 54px);
+}
+
+.gwr-inquiry-flow[hidden] { display: none; }
+
+.gwr-inquiry-flow > header {
+  display: grid;
+  gap: 8px;
+}
+
+.gwr-inquiry-flow > header > span {
+  color: var(--gwr-primary-strong);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.gwr-inquiry-flow > header h3 {
+  margin: 0;
+  color: var(--gwr-ink);
+  font-size: clamp(26px, 4vw, 40px);
+}
+
+.gwr-inquiry-flow > header p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--gwr-muted);
+  line-height: 1.65;
+}
+
+.gwr-inquiry-confirmation {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: clamp(30px, 8vw, 74px) 20px;
+  text-align: center;
+}
+
+.gwr-inquiry-confirmation[hidden] { display: none; }
+
+.gwr-inquiry-confirmation > span {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: #ddf8ec;
+  color: #087443;
+  font-size: 32px;
+  font-weight: 900;
+}
+
+.gwr-inquiry-confirmation h3,
+.gwr-inquiry-confirmation p { margin: 0; }
+
+.gwr-contact-action.is-phone {
+  border-color: #c9d6ec;
+  background: #eef4ff;
+  color: #173787;
+}
+
+@media (max-width: 560px) {
+  .gwr-inquiry-flow { padding: 24px 16px 110px; }
+}
+
 .gwr-rent-catalog,
 .gwr-payment-status,
 .gwr-booking-portal {
