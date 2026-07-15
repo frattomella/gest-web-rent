@@ -203,25 +203,23 @@
   display: grid;
   grid-template-columns: minmax(190px, .85fr) minmax(430px, 1.8fr) minmax(150px, .62fr);
   gap: 16px;
-  align-items: end;
+  align-items: start;
 }
 
 .gwr-search-form__location,
-.gwr-search-form__dates,
-.gwr-date-time-group {
+.gwr-search-form__dates {
   min-width: 0;
 }
 
 .gwr-search-form__dates {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(132px, 1.25fr) minmax(96px, .75fr) minmax(132px, 1.25fr) minmax(96px, .75fr);
+  gap: 10px;
+  align-items: start;
 }
 
-.gwr-date-time-group {
-  display: grid;
-  grid-template-columns: minmax(140px, 1.35fr) minmax(104px, .65fr);
-  gap: 10px;
+.gwr-search-field {
+  align-content: start;
 }
 
 .gwr-filter-panel label {
@@ -338,6 +336,8 @@
   cursor: pointer;
   box-shadow: 0 10px 22px rgba(23, 55, 135, .18);
   transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  align-self: start;
+  margin-top: calc(1.3em + 7px);
 }
 
 .gwr-search-button:hover:not(:disabled) {
@@ -1847,6 +1847,7 @@ body.gwr-modal-open {
 
   .gwr-search-button {
     grid-column: 1 / -1;
+    margin-top: 0;
   }
 
   .gwr-filter-advanced__header {
@@ -2005,9 +2006,13 @@ body.gwr-modal-open {
   }
 
   .gwr-search-form__main,
-  .gwr-search-form__dates,
   .gwr-catalog-grid {
     grid-template-columns: 1fr;
+  }
+
+  .gwr-search-form__dates {
+    grid-template-columns: minmax(0, 1.35fr) minmax(92px, .65fr);
+    gap: 10px;
   }
 
   .gwr-search-panel__heading {
@@ -2186,8 +2191,8 @@ body.gwr-modal-open {
 }
 
 @media (max-width: 420px) {
-  .gwr-date-time-group {
-    grid-template-columns: 1fr;
+  .gwr-search-form__dates {
+    grid-template-columns: minmax(0, 1fr) minmax(88px, .58fr);
   }
 
   .gwr-search-summary__actions {

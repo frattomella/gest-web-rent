@@ -1,10 +1,10 @@
-# Gest Web Rent v2.0.0
+# Gest Web Rent v2.0.1
 
-Questa release corregge definitivamente il caricamento del dettaglio veicolo e introduce tre modalita operative reali.
+Questa release ripristina la consultazione immediata dei veicoli e rende affidabile ogni comando del catalogo.
 
-- Dettaglio on demand tramite route REST pubblica read-only, non dipendente dai nonce delle pagine cache.
-- Modalita Vetrina, Richiesta di prenotazione e Prenotazione online selezionabili dalla dashboard.
-- Modulo richieste leggero con archivio amministrativo e blocco disponibilita opzionale.
-- Endpoint, menu, servizi, pagamenti e cron attivati esclusivamente quando pertinenti.
-- Nessuna cancellazione di prenotazioni, pagamenti, documenti o richieste durante il cambio modalita.
+- Dettaglio veicolo accessibile anche senza aver selezionato luogo, date o orari.
+- Trasporto REST con fallback AJAX pubblico, read-only e rate limited.
+- Pulsanti Cerca veicoli, Applica filtri e Azzera filtri collegati al refresh effettivo dei risultati.
+- Date e orari ordinati e allineati in modo coerente su desktop, tablet e mobile.
+- Nessuna modifica a dati, disponibilita, prezzi, richieste o prenotazioni esistenti.
 - Asset ufficiale `gest-web-rent.zip` con cartella radice corretta per WordPress.

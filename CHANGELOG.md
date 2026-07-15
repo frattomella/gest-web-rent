@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.1
+
+- Corretto il caricamento del dettaglio veicolo senza ricerca preventiva per luogo o periodo.
+- Aggiunto fallback AJAX read-only e rate limited quando la route REST del dettaglio non e disponibile.
+- Reso il filtro catalogo indipendente dai nonce presenti nelle pagine cache, con fallback AJAX compatibile.
+- Corretta la validazione: luogo, date e orari sono facoltativi; un periodo inserito resta validato integralmente.
+- Ripristinato il refresh per i pulsanti Cerca veicoli, Applica filtri e Azzera filtri.
+- Riordinati e allineati i quattro campi data/ora nel banner di ricerca su desktop, tablet e mobile.
+
 ## 2.0.0
 
 - Corretto definitivamente il caricamento del dettaglio veicolo sostituendo il nonce pubblico soggetto a cache con una route REST read-only, validata e rate limited.

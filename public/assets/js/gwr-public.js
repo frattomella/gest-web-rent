@@ -179,23 +179,28 @@
       invalidate(returnLocation, i18n.returnLocation || 'Seleziona la localita di riconsegna.');
     }
 
+    var hasPickupDate = !!(pickupDate && pickupDate.value.trim());
+    var hasReturnDate = !!(returnDate && returnDate.value.trim());
+    var hasPeriod = hasPickupDate || hasReturnDate;
     var pickupIso = syncDateField(pickupDate);
     var returnIso = syncDateField(returnDate);
-    if (!pickupDate.value.trim()) invalidate(pickupDate, i18n.pickupDateRequired || 'Inserisci la data di ritiro.');
-    else if (!pickupIso) invalidate(pickupDate, i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
-    if (!returnDate.value.trim()) invalidate(returnDate, i18n.returnDateRequired || 'Inserisci la data di riconsegna.');
-    else if (!returnIso) invalidate(returnDate, i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
+    if (hasPeriod) {
+      if (!hasPickupDate) invalidate(pickupDate, i18n.pickupDateRequired || 'Inserisci la data di ritiro.');
+      else if (!pickupIso) invalidate(pickupDate, i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
+      if (!hasReturnDate) invalidate(returnDate, i18n.returnDateRequired || 'Inserisci la data di riconsegna.');
+      else if (!returnIso) invalidate(returnDate, i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
 
-    if (pickupIso && isoDateTimestamp(pickupIso) < todayTimestamp()) {
-      invalidate(pickupDate, i18n.pastDate || 'La data di ritiro non puo essere precedente a oggi.');
-    }
-    if (!pickupTime || !isValidTime(pickupTime.value)) invalidate(pickupTime, i18n.timeRequired || 'Inserisci un orario valido nel formato HH:MM.');
-    if (!returnTime || !isValidTime(returnTime.value)) invalidate(returnTime, i18n.timeRequired || 'Inserisci un orario valido nel formato HH:MM.');
+      if (pickupIso && isoDateTimestamp(pickupIso) < todayTimestamp()) {
+        invalidate(pickupDate, i18n.pastDate || 'La data di ritiro non puo essere precedente a oggi.');
+      }
+      if (!pickupTime || !isValidTime(pickupTime.value)) invalidate(pickupTime, i18n.timeRequired || 'Inserisci un orario valido nel formato HH:MM.');
+      if (!returnTime || !isValidTime(returnTime.value)) invalidate(returnTime, i18n.timeRequired || 'Inserisci un orario valido nel formato HH:MM.');
 
-    var pickupTimestamp = dateTimeTimestamp(pickupIso, pickupTime ? pickupTime.value : '');
-    var returnTimestamp = dateTimeTimestamp(returnIso, returnTime ? returnTime.value : '');
-    if (!Number.isNaN(pickupTimestamp) && !Number.isNaN(returnTimestamp) && returnTimestamp <= pickupTimestamp) {
-      invalidate(returnDate, i18n.returnAfterPickup || 'La riconsegna deve essere successiva al ritiro.');
+      var pickupTimestamp = dateTimeTimestamp(pickupIso, pickupTime ? pickupTime.value : '');
+      var returnTimestamp = dateTimeTimestamp(returnIso, returnTime ? returnTime.value : '');
+      if (!Number.isNaN(pickupTimestamp) && !Number.isNaN(returnTimestamp) && returnTimestamp <= pickupTimestamp) {
+        invalidate(returnDate, i18n.returnAfterPickup || 'La riconsegna deve essere successiva al ritiro.');
+      }
     }
 
     if (firstInvalid) {
@@ -1142,12 +1147,62 @@
     ].join('');
   }
 
+  function renderMinimalVehicleContent(vehicle, dates, modal) {
+    vehicle = normalizeVehicleDetails(vehicle);
+    var ids = modalIds(modal);
+    var cfg = catalogConfig();
+    var title = [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || vehicle.title || 'Veicolo';
+    var image = uniqueImages(vehicle.images)[0] || {};
+    var imageUrl = safeHttpUrl(image.url);
+    var links = contactLinks(vehicle, dates || {});
+    var contacts = (links.whatsapp ? '<a class="gwr-contact-action is-whatsapp" href="' + escapeHtml(links.whatsapp) + '" target="_blank" rel="noopener noreferrer">' + iconSvg('whatsapp') + '<span>WhatsApp</span></a>' : '') + (links.email ? '<a class="gwr-contact-action is-email" href="' + escapeHtml(links.email) + '">' + iconSvg('mail') + '<span>Email</span></a>' : '');
+    if (cfg.contact && cfg.contact.contactPhone) contacts += '<a class="gwr-contact-action is-phone" href="tel:' + escapeHtml(String(cfg.contact.contactPhone).replace(/[^0-9+]/g, '')) + '">' + iconSvg('phone') + '<span>Telefono</span></a>';
+    var facts = [
+      detailItem('Categoria', vehicle.category),
+      detailItem('Alimentazione', vehicle.fuel),
+      detailItem('Cambio', vehicle.transmission),
+      detailItem('Posti', valueWithUnit(vehicle.seats, 'posti')),
+      detailItem('Sede', vehicle.location)
+    ].join('');
+    return [
+      '<div class="gwr-vehicle-configurator gwr-vehicle-configurator--fallback" data-gwr-vehicle-id="' + escapeHtml(vehicle.id) + '">',
+      '<header class="gwr-vehicle-configurator__header"><div><span class="gwr-config-category">' + escapeHtml(vehicle.category || 'Noleggio veicolo') + '</span><h2 id="' + escapeHtml(ids.title) + '">' + escapeHtml(title) + '</h2><p id="' + escapeHtml(ids.description) + '">Dettagli principali del veicolo</p></div></header>',
+      '<div class="gwr-vehicle-configurator__body"><main class="gwr-vehicle-configurator__main">',
+      imageUrl ? '<section class="gwr-config-gallery"><div class="gwr-modal-gallery-frame"><img class="gwr-modal-main-image" src="' + escapeHtml(imageUrl) + '" alt="' + escapeHtml(title) + '" /></div></section>' : '',
+      facts ? '<section class="gwr-config-section"><h3>Panoramica</h3><div class="gwr-config-grid">' + facts + '</div></section>' : '',
+      vehicle.description ? '<section class="gwr-config-section"><h3>Descrizione</h3><div class="gwr-config-copy">' + escapeHtml(plainText(vehicle.description)) + '</div></section>' : '',
+      '</main><aside class="gwr-vehicle-configurator__summary"><span class="gwr-config-summary__eyebrow">Informazioni noleggio</span>',
+      vehicle.daily_price ? '<div class="gwr-config-price"><span>Tariffa giornaliera</span><strong>' + escapeHtml(vehicle.daily_price) + '</strong></div>' : '<div class="gwr-config-price"><strong>Prezzo su richiesta</strong></div>',
+      '<span class="gwr-config-availability">Disponibilita da verificare</span>',
+      '<section class="gwr-config-contact"><h3>Contatta il noleggiatore</h3><p>Puoi richiedere informazioni anche senza aver selezionato un periodo.</p>' + (contacts ? '<div class="gwr-modal-contact__actions">' + contacts + '</div>' : '<p>Configura un canale di contatto nelle impostazioni del plugin.</p>') + '</section>',
+      '</aside></div></div>'
+    ].join('');
+  }
+
+  function parsePublicJsonResponse(response) {
+    return response.text().then(function (text) {
+      var payload;
+      try { payload = JSON.parse(String(text || '').replace(/^\uFEFF/, '').trim()); } catch (error) {
+        var invalidResponse = new Error('invalid_response');
+        invalidResponse.code = 'invalid_response';
+        throw invalidResponse;
+      }
+      var errorData = payload && payload.success === false && payload.data ? payload.data : payload;
+      if (!response.ok || !payload || payload.success === false) {
+        var requestError = new Error(errorData && errorData.message ? errorData.message : 'request_failed');
+        requestError.code = errorData && errorData.code ? errorData.code : 'request_failed';
+        throw requestError;
+      }
+      return payload;
+    });
+  }
+
   function loadVehicleDetails(vehicleId, dates, force) {
     var cfg = catalogConfig();
     var cacheKey = vehicleDetailCacheKey(vehicleId, dates);
     if (force) vehicleDetailsCache.delete(cacheKey);
     if (!force && vehicleDetailsCache.has(cacheKey)) return Promise.resolve(vehicleDetailsCache.get(cacheKey));
-    if (!cfg.detailUrl) return Promise.reject(new Error('request_configuration_missing'));
+    if (!cfg.detailUrl && !cfg.ajaxUrl) return Promise.reject(new Error('request_configuration_missing'));
 
     if (activeVehicleRequest && typeof activeVehicleRequest.abort === 'function') activeVehicleRequest.abort();
     var controller = typeof window.AbortController === 'function' ? new window.AbortController() : null;
@@ -1156,30 +1211,30 @@
     ['start_date', 'pickup_time', 'end_date', 'return_time', 'pickup_location', 'return_location', 'different_return', 'coupon', 'coupon_code'].forEach(function (key) {
       if (dates && dates[key] !== undefined && dates[key] !== '') query.set(key, dates[key]);
     });
-    var requestOptions = {
-      method: 'GET',
-      credentials: 'same-origin',
-      headers: { 'Accept': 'application/json' }
-    };
+    var requestOptions = { method: 'GET', credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
     if (controller) requestOptions.signal = controller.signal;
 
-    var detailUrl = new URL(String(cfg.detailUrl).replace('__VEHICLE_ID__', encodeURIComponent(vehicleId)), window.location.href);
-    query.forEach(function (value, key) { detailUrl.searchParams.set(key, value); });
-    return window.fetch(detailUrl.toString(), requestOptions).then(function (response) {
-      return response.text().then(function (text) {
-        var payload;
-        try { payload = JSON.parse(String(text || '').replace(/^\uFEFF/, '').trim()); } catch (error) {
-          var invalidResponse = new Error('invalid_response');
-          invalidResponse.code = 'invalid_response';
-          throw invalidResponse;
-        }
-        if (!response.ok || !payload) {
-          var requestError = new Error(payload && payload.message ? payload.message : 'request_failed');
-          requestError.code = payload && payload.code ? payload.code : 'request_failed';
-          throw requestError;
-        }
-        return payload;
-      });
+    function requestViaRest() {
+      if (!cfg.detailUrl) return Promise.reject(new Error('rest_unavailable'));
+      var detailUrl = new URL(String(cfg.detailUrl).replace('__VEHICLE_ID__', encodeURIComponent(vehicleId)), window.location.href);
+      query.forEach(function (value, key) { detailUrl.searchParams.set(key, value); });
+      return window.fetch(detailUrl.toString(), requestOptions).then(parsePublicJsonResponse);
+    }
+
+    function requestViaAjax() {
+      if (!cfg.ajaxUrl) return Promise.reject(new Error('ajax_unavailable'));
+      var body = new URLSearchParams(query.toString());
+      body.set('action', cfg.detailAjaxAction || 'gwr_get_vehicle_details');
+      body.set('vehicle_id', String(vehicleId));
+      var options = { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json' }, body: body.toString() };
+      if (controller) options.signal = controller.signal;
+      return window.fetch(cfg.ajaxUrl, options).then(parsePublicJsonResponse);
+    }
+
+    return requestViaRest().catch(function (error) {
+      if (error && (error.name === 'AbortError' || ['invalid_vehicle_id', 'vehicle_not_found', 'rate_limit'].indexOf(error.code) !== -1)) throw error;
+      debugLog('Vehicle REST route unavailable, using AJAX fallback', error && (error.code || error.message));
+      return requestViaAjax();
     }).then(function (payload) {
       var vehicle = normalizeVehicleDetailsResponse(payload);
       if (!vehicle.id || vehicle.id !== Number(vehicleId)) throw new Error('invalid_vehicle_payload');
@@ -1257,7 +1312,12 @@
     loadVehicleDetails(context.vehicleId, context.dates, force).then(function (fullVehicle) {
       if (!modal.classList.contains('is-open') || requestSequence !== vehicleRequestSequence || fullVehicle.id !== context.vehicleId) return;
       activeBookingContext = { vehicle: fullVehicle, dates: context.dates, startedAt: Math.floor(Date.now() / 1000) };
-      content.innerHTML = renderModalContent(fullVehicle, context.dates, modal);
+      try {
+        content.innerHTML = renderModalContent(fullVehicle, context.dates, modal);
+      } catch (renderError) {
+        debugLog('Complete vehicle renderer failed, using essential detail', renderError && renderError.message ? renderError.message : 'unknown');
+        content.innerHTML = renderMinimalVehicleContent(fullVehicle, context.dates, modal);
+      }
       content.scrollTop = 0;
       var dialog = qs(modal, '.gwr-modal__dialog');
       if (dialog) dialog.setAttribute('aria-busy', 'false');
@@ -1469,9 +1529,10 @@
       var pickupLabel = selectedOptionLabel(pickupSelect) || 'Localita da definire';
       var returnLabel = data.different_return === '1' ? (selectedOptionLabel(returnSelect) || pickupLabel) : pickupLabel;
       if (summaryLocation) summaryLocation.textContent = pickupLabel === returnLabel ? pickupLabel : pickupLabel + ' \u2192 ' + returnLabel;
-      if (summaryPeriod) summaryPeriod.textContent = isoToItalianDate(data.start_date) + ', ' + data.pickup_time + ' \u2192 ' + isoToItalianDate(data.end_date) + ', ' + data.return_time;
-      if (summaryDuration) summaryDuration.textContent = rentalDurationLabel(data);
-      if (toolbarPeriod) toolbarPeriod.textContent = isoToItalianDate(data.start_date) + ' \u2192 ' + isoToItalianDate(data.end_date);
+      var hasPeriod = !!(data.start_date && data.end_date);
+      if (summaryPeriod) summaryPeriod.textContent = hasPeriod ? isoToItalianDate(data.start_date) + ', ' + data.pickup_time + ' \u2192 ' + isoToItalianDate(data.end_date) + ', ' + data.return_time : 'Periodo non selezionato';
+      if (summaryDuration) summaryDuration.textContent = hasPeriod ? rentalDurationLabel(data) : 'Tutti i periodi';
+      if (toolbarPeriod) toolbarPeriod.textContent = hasPeriod ? isoToItalianDate(data.start_date) + ' \u2192 ' + isoToItalianDate(data.end_date) : 'Tutti i periodi';
       if (searchSummary) searchSummary.hidden = false;
     }
 
@@ -1599,30 +1660,54 @@
       qsa(results, '[data-gwr-card-duration]').forEach(function (node) { node.textContent = label; });
     }
 
-    function runRequest(data) {
+    function requestCatalogData(data) {
       var cfg = catalogConfig();
-      if (!cfg.ajaxUrl || !cfg.nonce || requestInProgress) return;
-      var body = new FormData();
+      var query = new URLSearchParams();
+      Object.keys(data).forEach(function (key) { query.set(key, data[key]); });
+
+      function normalize(payload) {
+        return payload && payload.success === true && payload.data ? payload.data : payload;
+      }
+
+      function viaRest() {
+        if (!cfg.filterUrl) return Promise.reject(new Error('rest_unavailable'));
+        var url = new URL(cfg.filterUrl, window.location.href);
+        query.forEach(function (value, key) { url.searchParams.set(key, value); });
+        return window.fetch(url.toString(), { method: 'GET', credentials: 'same-origin', headers: { 'Accept': 'application/json' } }).then(parsePublicJsonResponse).then(normalize);
+      }
+
+      function viaAjax() {
+        if (!cfg.ajaxUrl || !cfg.nonce) return Promise.reject(new Error('ajax_unavailable'));
+        var body = new FormData();
+        body.append('action', 'gwr_filter_catalog');
+        body.append('nonce', cfg.nonce);
+        query.forEach(function (value, key) { body.append(key, value); });
+        return window.fetch(cfg.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body }).then(parsePublicJsonResponse).then(normalize);
+      }
+
+      return viaRest().catch(function (error) {
+        if (error && (error.name === 'AbortError' || error.code === 'rate_limit')) throw error;
+        debugLog('Catalog REST route unavailable, using AJAX fallback', error && (error.code || error.message));
+        return viaAjax();
+      });
+    }
+
+    function runRequest(data) {
+      if (requestInProgress) return;
       clearCatalogError(errorNode);
       if (data.different_return !== '1') delete data.return_location;
       data.pickup_date = data.start_date;
       data.return_date = data.end_date;
       lastRequestData = Object.assign({}, data);
       clearVehicleDetailsCache();
-      body.append('action', 'gwr_filter_catalog');
-      body.append('nonce', cfg.nonce);
-      Object.keys(data).forEach(function (key) { body.append(key, data[key]); });
       setLoading(true);
       renderSkeletons();
-      return window.fetch(cfg.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body }).then(function (response) {
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        return response.json();
-      }).then(function (json) {
-        if (!json || !json.success) throw new Error('AJAX error');
-        results.innerHTML = json.data.html;
-        if (categorySlot) categorySlot.innerHTML = json.data.categories || '';
-        if (json.data.error) showCatalogError(errorNode, json.data.error); else clearCatalogError(errorNode);
-        updateResultCount(Number(json.data.count) || 0);
+      return requestCatalogData(data).then(function (payload) {
+        if (!payload || typeof payload.html !== 'string') throw new Error('invalid_catalog_response');
+        results.innerHTML = payload.html;
+        if (categorySlot) categorySlot.innerHTML = payload.categories || '';
+        if (payload.error) showCatalogError(errorNode, payload.error); else clearCatalogError(errorNode);
+        updateResultCount(Number(payload.count) || 0);
         updateSearchSummary(data);
         updateCardDurations(data);
         applySort();
@@ -1659,9 +1744,9 @@
       });
       input.addEventListener('blur', function () {
         var cfg = catalogConfig();
-        var role = input.getAttribute('data-gwr-date-role');
         if (!input.value.trim()) {
-          showFieldError(input, role === 'pickup' ? (cfg.i18n.pickupDateRequired || 'Inserisci la data di ritiro.') : (cfg.i18n.returnDateRequired || 'Inserisci la data di riconsegna.'));
+          syncDateField(input);
+          clearFieldError(input);
         } else if (!syncDateField(input)) {
           showFieldError(input, cfg.i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
         } else {
@@ -1688,7 +1773,10 @@
     if (sortSelect) sortSelect.addEventListener('change', applySort);
     catalog.addEventListener('click', function (event) {
       if (event.target.closest('[data-gwr-reset-filters]')) {
+        event.preventDefault();
         clearSecondaryFilters();
+        renderActiveFilters();
+        requestFormSubmit(form);
         return;
       }
       if (event.target.closest('[data-gwr-reset-and-search]')) {

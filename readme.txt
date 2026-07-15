@@ -4,7 +4,7 @@ Tags: noleggio, veicoli, catalogo, whatsapp, rent
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 2.0.0
+Stable tag: 2.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,12 @@ No. Il dettaglio si apre in overlay/modal senza cambiare pagina.
 No. Veicoli, foto, impostazioni e indisponibilita sono salvati nel database WordPress.
 
 == Changelog ==
+
+= 2.0.1 =
+* Ripristinata l'apertura immediata del dettaglio veicolo senza obbligare l'utente a selezionare luogo, date o orari.
+* Aggiunto fallback pubblico AJAX per il dettaglio quando la route REST non e raggiungibile sul server ospitante.
+* Resi operativi Cerca veicoli, Applica filtri e Azzera filtri con refresh affidabile del catalogo.
+* Allineati in ordine logico e in modo responsive i campi data e ora di ritiro e riconsegna.
 
 = 2.0.0 =
 * Reso il dettaglio veicolo indipendente dai nonce presenti nelle pagine cache tramite route REST pubblica read-only e rate limit.

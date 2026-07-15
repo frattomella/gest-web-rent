@@ -205,5 +205,5 @@ Ogni release deve aggiornare:
 Release corrente:
 
 ```text
-2.0.0
+2.0.1
 ```
