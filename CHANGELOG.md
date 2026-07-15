@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.2
+
+- Corretto il caricamento del catalogo dopo la selezione delle date quando l'hosting limita le route REST personalizzate.
+- Aggiunto fallback AJAX pubblico, read-only e rate limited, indipendente dai nonce delle pagine cache.
+- Mantenuto l'endpoint AJAX con nonce come fallback legacy di terzo livello.
+- Protetta la risposta JSON del filtro da output PHP inatteso.
+
 ## 2.0.1
 
 - Corretto il caricamento del dettaglio veicolo senza ricerca preventiva per luogo o periodo.

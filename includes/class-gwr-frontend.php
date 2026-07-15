@@ -18,6 +18,8 @@ class GWR_Frontend {
 		add_shortcode( 'gest_web_rent_catalog', array( __CLASS__, 'catalog_shortcode' ) );
 		add_action( 'wp_ajax_gwr_filter_catalog', array( __CLASS__, 'ajax_filter_catalog' ) );
 		add_action( 'wp_ajax_nopriv_gwr_filter_catalog', array( __CLASS__, 'ajax_filter_catalog' ) );
+		add_action( 'wp_ajax_gwr_filter_catalog_public', array( __CLASS__, 'ajax_filter_catalog_public' ) );
+		add_action( 'wp_ajax_nopriv_gwr_filter_catalog_public', array( __CLASS__, 'ajax_filter_catalog_public' ) );
 		add_action( 'wp_ajax_gwr_get_vehicle_details', array( __CLASS__, 'ajax_vehicle_detail' ) );
 		add_action( 'wp_ajax_nopriv_gwr_get_vehicle_details', array( __CLASS__, 'ajax_vehicle_detail' ) );
 
@@ -539,6 +541,32 @@ class GWR_Frontend {
 		wp_send_json_success( self::catalog_response_payload( $_POST ) );
 	}
 
+	/** Cache-safe AJAX fallback for the public, read-only catalog search. */
+	public static function ajax_filter_catalog_public() {
+		$rate_limit = self::check_public_rate_limit( 'catalog_ajax', 120 );
+		if ( is_wp_error( $rate_limit ) ) {
+			wp_send_json_error( array( 'code' => $rate_limit->get_error_code(), 'message' => $rate_limit->get_error_message() ), 429 );
+		}
+
+		$level = ob_get_level();
+		ob_start();
+		try {
+			$payload = self::catalog_response_payload( $_POST );
+		} catch ( Throwable $error ) {
+			self::debug_detail_error( 'catalog_ajax', 0, $error );
+			$payload = new WP_Error( 'catalog_failed', __( 'Non e stato possibile completare la ricerca.', 'gest-web-rent' ) );
+		}
+		while ( ob_get_level() > $level ) {
+			ob_end_clean();
+		}
+
+		if ( is_wp_error( $payload ) ) {
+			wp_send_json_error( array( 'code' => $payload->get_error_code(), 'message' => $payload->get_error_message() ), 500 );
+		}
+
+		wp_send_json_success( $payload );
+	}
+
 	/** Build the shared response for REST and legacy AJAX catalog filtering. */
 	private static function catalog_response_payload( $source ) {
 		$filters             = self::filters_from_request( is_array( $source ) ? $source : array() );
@@ -577,6 +605,7 @@ class GWR_Frontend {
 				'detailUrl' => rest_url( 'gwr/v1/vehicles/__VEHICLE_ID__/details' ),
 				'filterUrl' => rest_url( 'gwr/v1/catalog' ),
 				'detailAjaxAction' => 'gwr_get_vehicle_details',
+				'filterAjaxAction' => 'gwr_filter_catalog_public',
 				'nonce'   => wp_create_nonce( 'gwr_catalog_nonce' ),
 				'operationMode' => gwr_get_operation_mode(),
 				'i18n'    => array(

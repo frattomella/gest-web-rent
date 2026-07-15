@@ -1,10 +1,10 @@
-# Gest Web Rent v2.0.1
+# Gest Web Rent v2.0.2
 
-Questa release ripristina la consultazione immediata dei veicoli e rende affidabile ogni comando del catalogo.
+Questa release corregge il caricamento dei risultati dopo la selezione delle date anche sugli hosting con REST API limitata o pagine in cache.
 
-- Dettaglio veicolo accessibile anche senza aver selezionato luogo, date o orari.
-- Trasporto REST con fallback AJAX pubblico, read-only e rate limited.
-- Pulsanti Cerca veicoli, Applica filtri e Azzera filtri collegati al refresh effettivo dei risultati.
-- Date e orari ordinati e allineati in modo coerente su desktop, tablet e mobile.
+- Ricerca catalogo tramite REST con fallback AJAX pubblico indipendente dai nonce.
+- Endpoint read-only protetto da rate limit e output PHP inatteso.
+- Fallback AJAX legacy mantenuto per la compatibilita con installazioni esistenti.
+- Nessuna modifica alla query disponibilita o ai dati dei veicoli.
 - Nessuna modifica a dati, disponibilita, prezzi, richieste o prenotazioni esistenti.
 - Asset ufficiale `gest-web-rent.zip` con cartella radice corretta per WordPress.

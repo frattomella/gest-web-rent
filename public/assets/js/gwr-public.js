@@ -1676,8 +1676,16 @@
         return window.fetch(url.toString(), { method: 'GET', credentials: 'same-origin', headers: { 'Accept': 'application/json' } }).then(parsePublicJsonResponse).then(normalize);
       }
 
-      function viaAjax() {
-        if (!cfg.ajaxUrl || !cfg.nonce) return Promise.reject(new Error('ajax_unavailable'));
+      function viaPublicAjax() {
+        if (!cfg.ajaxUrl) return Promise.reject(new Error('public_ajax_unavailable'));
+        var body = new FormData();
+        body.append('action', cfg.filterAjaxAction || 'gwr_filter_catalog_public');
+        query.forEach(function (value, key) { body.append(key, value); });
+        return window.fetch(cfg.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body }).then(parsePublicJsonResponse).then(normalize);
+      }
+
+      function viaLegacyAjax() {
+        if (!cfg.ajaxUrl || !cfg.nonce) return Promise.reject(new Error('legacy_ajax_unavailable'));
         var body = new FormData();
         body.append('action', 'gwr_filter_catalog');
         body.append('nonce', cfg.nonce);
@@ -1687,8 +1695,12 @@
 
       return viaRest().catch(function (error) {
         if (error && (error.name === 'AbortError' || error.code === 'rate_limit')) throw error;
-        debugLog('Catalog REST route unavailable, using AJAX fallback', error && (error.code || error.message));
-        return viaAjax();
+        debugLog('Catalog REST route unavailable, using public AJAX fallback', error && (error.code || error.message));
+        return viaPublicAjax();
+      }).catch(function (error) {
+        if (error && (error.name === 'AbortError' || error.code === 'rate_limit')) throw error;
+        debugLog('Public catalog AJAX unavailable, using legacy fallback', error && (error.code || error.message));
+        return viaLegacyAjax();
       });
     }
 
