@@ -337,6 +337,14 @@ class GWR_Frontend {
 			'whatsapp'       => $whatsapp,
 			'email'          => is_email( $email ) ? $email : '',
 			'phone'          => $phone,
+			'dealerName'     => sanitize_text_field( (string) ( $settings['dealer_name'] ?? '' ) ),
+			'whatsappNumber' => $whatsapp,
+			'contactEmail'   => is_email( $email ) ? $email : '',
+			'contactPhone'   => $phone,
+			'whatsappTemplate' => sanitize_textarea_field( (string) ( $settings['whatsapp_message'] ?? '' ) ),
+			'emailSubject'   => sanitize_text_field( (string) ( $settings['email_subject'] ?? '' ) ),
+			'emailBody'      => sanitize_textarea_field( (string) ( $settings['email_body'] ?? '' ) ),
+			'privacyNote'    => sanitize_textarea_field( (string) ( $settings['privacy_note'] ?? '' ) ),
 			'whatsapp_ready' => ! empty( $whatsapp ),
 			'email_ready'    => is_email( $email ),
 		);
@@ -419,13 +427,38 @@ class GWR_Frontend {
 	private static function public_pricing_details( $quote ) {
 		$currency = sanitize_text_field( (string) ( $quote['currency'] ?? 'EUR' ) );
 		$total    = (float) ( $quote['grand_total'] ?? 0 );
+		$days     = max( 1, absint( $quote['duration']['billable_days'] ?? 1 ) );
+		$format   = static function ( $amount ) use ( $currency ) {
+			return GWR_Bookings::format_money( (float) $amount, $currency );
+		};
+		$breakdown = array();
+		$breakdown[] = array( 'label' => __( 'Noleggio base', 'gest-web-rent' ), 'value' => $format( $quote['base_price'] ?? 0 ) );
+		foreach ( array(
+			'extras_minor'      => __( 'Extra', 'gest-web-rent' ),
+			'coverages_minor'   => __( 'Coperture', 'gest-web-rent' ),
+			'supplements_minor' => __( 'Supplementi', 'gest-web-rent' ),
+		) as $key => $label ) {
+			if ( ! empty( $quote[ $key ] ) ) {
+				$breakdown[] = array( 'label' => $label, 'value' => $format( (int) $quote[ $key ] / 100 ) );
+			}
+		}
+		if ( ! empty( $quote['discounts_minor'] ) ) {
+			$breakdown[] = array( 'label' => __( 'Sconti', 'gest-web-rent' ), 'value' => '- ' . $format( (int) $quote['discounts_minor'] / 100 ) );
+		}
+		if ( ! empty( $quote['tax_total'] ) ) {
+			$breakdown[] = array( 'label' => __( 'Imposte', 'gest-web-rent' ), 'value' => $format( $quote['tax_total'] ) );
+		}
 		return array(
 			'status'            => 'available',
 			'currency'          => $currency,
-			'billable_days'     => absint( $quote['duration']['billable_days'] ?? 0 ),
+			'billable_days'     => $days,
+			'duration_label'    => sprintf( _n( '%d giorno tariffario', '%d giorni tariffari', $days, 'gest-web-rent' ), $days ),
 			'grand_total'       => $total,
 			'grand_total_minor' => (int) round( $total * 100 ),
 			'grand_total_label' => GWR_Bookings::format_money( $total, $currency ),
+			'average_daily'     => $total / $days,
+			'average_daily_label' => $format( $total / $days ),
+			'breakdown'         => $breakdown,
 			'pay_now_label'     => GWR_Bookings::format_money( (float) ( $quote['pay_now'] ?? 0 ), $currency ),
 			'pay_later_label'   => GWR_Bookings::format_money( (float) ( $quote['pay_later'] ?? 0 ), $currency ),
 			'deposit_label'     => GWR_Bookings::format_money( (float) ( $quote['deposit_due_at_pickup'] ?? 0 ), $currency ),
@@ -614,7 +647,7 @@ class GWR_Frontend {
 					'countOne'           => __( '1 veicolo disponibile', 'gest-web-rent' ),
 					'countMany'          => __( '%d veicoli disponibili', 'gest-web-rent' ),
 					'dateError'          => __( 'La data fine %2$s non puo precedere la data inizio %1$s.', 'gest-web-rent' ),
-					'invalidDate'        => __( 'Inserisci una data valida nel formato GG-MM-AAAA.', 'gest-web-rent' ),
+					'invalidDate'        => __( 'Seleziona una data valida dal calendario.', 'gest-web-rent' ),
 					'formError'          => __( 'Controlla i campi evidenziati.', 'gest-web-rent' ),
 					'pickupDateRequired' => __( 'Inserisci la data di ritiro.', 'gest-web-rent' ),
 					'returnDateRequired' => __( 'Inserisci la data di riconsegna.', 'gest-web-rent' ),
@@ -955,7 +988,19 @@ class GWR_Frontend {
 		} elseif ( 'from' === $price_mode && $daily_price ) {
 			$price_label = sprintf( __( 'Da %s', 'gest-web-rent' ), $daily_price );
 		}
-		$html = '<article class="gwr-vehicle-card" data-gwr-card data-gwr-vehicle-id="' . esc_attr( $vehicle_id ) . '" data-gwr-original-index="' . esc_attr( $index ) . '" data-gwr-price="' . esc_attr( (float) $vehicle['daily_price'] ) . '" data-gwr-brand="' . esc_attr( strtolower( (string) $vehicle['brand'] ) ) . '" data-gwr-category-name="' . esc_attr( strtolower( (string) $vehicle['category'] ) ) . '" data-gwr-featured="' . ( ! empty( $vehicle['featured'] ) ? '1' : '0' ) . '">';
+		$fallback_keys = array( 'id', 'title', 'brand', 'model', 'version', 'category', 'year', 'fuel', 'transmission', 'seats', 'doors', 'location', 'daily_price', 'daily_price_amount', 'weekly_price', 'monthly_price', 'description', 'features', 'images', 'included_km_daily', 'insurance_included', 'second_driver_included', 'home_delivery', 'min_driver_age', 'min_license_years', 'min_rental_days', 'max_rental_days', 'deposit' );
+		$fallback_payload = array_intersect_key( $payload, array_flip( $fallback_keys ) );
+		$fallback_payload['contact'] = array(
+			'dealerName'       => sanitize_text_field( (string) ( $settings['dealer_name'] ?? '' ) ),
+			'whatsappNumber'   => preg_replace( '/\D+/', '', (string) ( $settings['whatsapp_number'] ?? '' ) ),
+			'contactEmail'     => sanitize_email( (string) ( $settings['contact_email'] ?? '' ) ),
+			'contactPhone'     => preg_replace( '/[^0-9+ ]/', '', sanitize_text_field( (string) ( $settings['contact_phone'] ?? '' ) ) ),
+			'whatsappTemplate' => sanitize_textarea_field( (string) ( $settings['whatsapp_message'] ?? '' ) ),
+			'emailSubject'     => sanitize_text_field( (string) ( $settings['email_subject'] ?? '' ) ),
+			'emailBody'        => sanitize_textarea_field( (string) ( $settings['email_body'] ?? '' ) ),
+			'privacyNote'      => sanitize_textarea_field( (string) ( $settings['privacy_note'] ?? '' ) ),
+		);
+		$html = '<article class="gwr-vehicle-card" data-gwr-card data-gwr-vehicle-id="' . esc_attr( $vehicle_id ) . '" data-gwr-vehicle-fallback="' . esc_attr( wp_json_encode( $fallback_payload ) ) . '" data-gwr-original-index="' . esc_attr( $index ) . '" data-gwr-price="' . esc_attr( (float) $vehicle['daily_price'] ) . '" data-gwr-brand="' . esc_attr( strtolower( (string) $vehicle['brand'] ) ) . '" data-gwr-category-name="' . esc_attr( strtolower( (string) $vehicle['category'] ) ) . '" data-gwr-featured="' . ( ! empty( $vehicle['featured'] ) ? '1' : '0' ) . '">';
 		$html .= '<div class="gwr-vehicle-card__media"><button type="button" class="gwr-vehicle-card__media-button" data-gwr-open-modal data-gwr-vehicle-id="' . esc_attr( $vehicle_id ) . '" aria-label="' . esc_attr( sprintf( __( 'Vedi le foto e i dettagli di %s', 'gest-web-rent' ), $primary_title ) ) . '">';
 		$html .= self::card_image( $cover, $primary_title );
 		$html .= '</button>' . ( $availability_label ? '<span class="gwr-vehicle-card__status">' . esc_html( $availability_label ) . '</span>' : '' );
@@ -974,7 +1019,6 @@ class GWR_Frontend {
 			$html .= '<span class="gwr-vehicle-card__pricing-label">' . esc_html( 'request' === $price_mode ? __( 'Tariffa', 'gest-web-rent' ) : __( 'Tariffa giornaliera', 'gest-web-rent' ) ) . '</span><div class="gwr-vehicle-card__daily-price"><strong>' . esc_html( $price_label ) . '</strong>' . ( $daily_price && 'daily' === $price_mode ? '<span>' . esc_html__( '/ giorno', 'gest-web-rent' ) . '</span>' : '' ) . '</div><span class="gwr-vehicle-card__duration" data-gwr-card-duration>' . esc_html__( 'Seleziona il periodo', 'gest-web-rent' ) . '</span><span class="gwr-vehicle-card__total-note">' . esc_html__( 'Totale da confermare', 'gest-web-rent' ) . '</span>';
 		}
 		$html .= '<button type="button" class="gwr-button gwr-vehicle-card__cta" data-gwr-open-modal data-gwr-vehicle-id="' . esc_attr( $vehicle_id ) . '">' . esc_html__( 'Vedi dettagli', 'gest-web-rent' ) . '</button></div>';
-		$html .= '<script type="application/json" data-gwr-vehicle-fallback>' . wp_json_encode( $payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) . '</script>';
 		$html .= '</article>';
 		return $html;
 	}
@@ -1036,19 +1080,13 @@ class GWR_Frontend {
 
 	private static function date_field( $name, $label, $value, $role ) {
 		$field_id = wp_unique_id( 'gwr-' . sanitize_key( $name ) . '-' );
-		$iso_id = $field_id . '-iso';
 		$help_id = $field_id . '-help';
 		$error_id = $field_id . '-error';
 		$iso_value = self::date_to_iso( $value );
-		$display_value = self::date_to_display( $value );
-		if ( '' === $display_value && '' !== (string) $value ) {
-			$display_value = sanitize_text_field( (string) $value );
-		}
 
 		$html = '<label class="gwr-search-field gwr-search-field--date" for="' . esc_attr( $field_id ) . '"><span>' . esc_html( $label ) . '</span>';
-		$html .= '<input id="' . esc_attr( $field_id ) . '" class="gwr-date-display" type="text" name="' . esc_attr( $name ) . '_display" value="' . esc_attr( $display_value ) . '" placeholder="GG-MM-AAAA" inputmode="numeric" autocomplete="off" aria-required="false" aria-describedby="' . esc_attr( $help_id . ' ' . $error_id ) . '" data-gwr-date-display data-gwr-date-role="' . esc_attr( $role ) . '" data-gwr-date-target="' . esc_attr( $iso_id ) . '" data-gwr-error-target="' . esc_attr( $error_id ) . '" />';
-		$html .= '<small id="' . esc_attr( $help_id ) . '" class="gwr-field-help">' . esc_html__( 'Formato GG-MM-AAAA', 'gest-web-rent' ) . '</small><small id="' . esc_attr( $error_id ) . '" class="gwr-field-error" data-gwr-field-error hidden></small></label>';
-		$html .= '<input id="' . esc_attr( $iso_id ) . '" type="hidden" name="' . esc_attr( $name ) . '" value="' . esc_attr( $iso_value ) . '" data-gwr-date-iso />';
+		$html .= '<span class="gwr-date-control"><input id="' . esc_attr( $field_id ) . '" type="date" name="' . esc_attr( $name ) . '" value="' . esc_attr( $iso_value ) . '" min="' . esc_attr( current_time( 'Y-m-d' ) ) . '" autocomplete="off" aria-required="false" aria-describedby="' . esc_attr( $help_id . ' ' . $error_id ) . '" data-gwr-date-picker data-gwr-date-role="' . esc_attr( $role ) . '" data-gwr-error-target="' . esc_attr( $error_id ) . '" /><span class="gwr-date-control__icon" aria-hidden="true"></span></span>';
+		$html .= '<small id="' . esc_attr( $help_id ) . '" class="gwr-field-help">' . esc_html__( 'Seleziona dal calendario', 'gest-web-rent' ) . '</small><small id="' . esc_attr( $error_id ) . '" class="gwr-field-error" data-gwr-field-error hidden></small></label>';
 		return $html;
 	}
 
