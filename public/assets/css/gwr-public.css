@@ -252,6 +252,43 @@
   transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
 }
 
+.gwr-time-control {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.gwr-filter-panel .gwr-time-control input[type="time"] {
+  position: relative;
+  padding-right: 44px;
+  line-height: normal;
+  appearance: auto;
+  color-scheme: light;
+  cursor: pointer;
+}
+
+.gwr-time-control__icon {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  transform: translateY(-50%);
+  background: center / 18px 18px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2364758b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E");
+}
+
+.gwr-filter-panel .gwr-time-control input[type="time"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 42px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .gwr-filter-panel select {
   padding-right: 42px;
   background-image: url("data:image/svg+xml,%3Csvg width='14' height='9' viewBox='0 0 14 9' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1.5 1.5L7 7L12.5 1.5' stroke='%23647187' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -713,7 +750,7 @@
 
 .gwr-results-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 286px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: clamp(20px, 2.6vw, 32px);
   align-items: start;
 }
@@ -870,7 +907,7 @@
 }
 
 .gwr-view-switch button[aria-pressed="true"] { background: #fff; color: var(--gwr-primary); box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
-.gwr-toolbar-filter { display: none; border: 1px solid var(--gwr-border); color: var(--gwr-primary); }
+.gwr-toolbar-filter { display: inline-flex; align-items: center; border: 1px solid var(--gwr-border); color: var(--gwr-primary); }
 
 .gwr-active-filters {
   display: flex;
@@ -1833,6 +1870,55 @@ body.gwr-modal-open {
 
 @media (min-width: 1024px) {
   .gwr-search-panel .gwr-filter-toggle { display: none; }
+
+  .gwr-rent-catalog { padding: clamp(10px, 1.35vw, 20px); }
+  .gwr-search-panel { margin-bottom: 16px; border-radius: 16px; }
+  .gwr-search-panel__heading { padding: 15px 22px 9px; }
+  .gwr-search-panel__heading h2 { margin: 4px 0 3px; font-size: clamp(1.3rem, 1.65vw, 1.65rem); }
+  .gwr-search-panel__heading p { font-size: .84rem; line-height: 1.4; }
+  .gwr-search-panel .gwr-filter-eyebrow { font-size: .64rem; }
+  .gwr-search-panel .gwr-filter-panel { gap: 10px; padding: 0 22px 15px; }
+  .gwr-search-form__main { grid-template-columns: minmax(170px, .8fr) minmax(500px, 2.1fr) minmax(135px, .58fr); gap: 10px; }
+  .gwr-search-form__dates { grid-template-columns: minmax(128px, 1.2fr) minmax(100px, .72fr) minmax(128px, 1.2fr) minmax(100px, .72fr); gap: 8px; }
+  .gwr-filter-panel label { gap: 4px; font-size: .76rem; }
+  .gwr-search-panel .gwr-filter-panel input:not([type="checkbox"]),
+  .gwr-search-panel .gwr-filter-panel select { height: 44px; min-height: 44px; padding-left: 12px; border-radius: 10px; font-size: .84rem; line-height: 44px; }
+  .gwr-search-panel .gwr-field-help { display: none; }
+  .gwr-location-toggle { gap: 6px; margin-top: 6px; font-size: .71rem; }
+  .gwr-location-toggle input { width: 15px; height: 15px; }
+  .gwr-return-location { margin-top: 8px; }
+  .gwr-search-button { min-height: 44px; margin-top: calc(1.3em + 4px); padding: 0 14px; border-radius: 10px; font-size: .85rem; box-shadow: 0 7px 16px rgba(23, 55, 135, .16); }
+
+  .gwr-rent-catalog.gwr-filters-open .gwr-results-layout { grid-template-columns: minmax(220px, 246px) minmax(0, 1fr); gap: 18px; }
+  .gwr-results-sidebar { top: 16px; max-height: calc(100vh - 32px); border-radius: 12px; }
+  .gwr-results-sidebar__form.gwr-filter-panel { padding: 14px; }
+  .gwr-results-sidebar .gwr-filter-advanced__header strong { font-size: 1rem; }
+  .gwr-sidebar-section__toggle { min-height: 43px; font-size: .8rem; }
+  .gwr-sidebar-section__content { padding-bottom: 12px; }
+  .gwr-results-sidebar .gwr-filter-panel label { gap: 4px; font-size: .74rem; }
+  .gwr-results-sidebar .gwr-filter-panel input:not([type="checkbox"]),
+  .gwr-results-sidebar .gwr-filter-panel select { height: 42px; min-height: 42px; padding: 0 11px; border-radius: 10px; font-size: .82rem; line-height: 42px; }
+  .gwr-results-sidebar .gwr-filter-actions { padding-top: 14px; }
+
+  .gwr-category-shortcuts { margin-bottom: 10px; }
+  .gwr-category-shortcuts__track { gap: 8px; padding-bottom: 6px; }
+  .gwr-category-shortcut { flex-basis: 142px; min-height: 78px; padding: 10px 12px; }
+  .gwr-category-shortcut strong { font-size: .84rem; }
+  .gwr-category-shortcut span, .gwr-category-shortcut small { font-size: .68rem; }
+  .gwr-results-toolbar { gap: 12px; margin-bottom: 10px; padding: 9px 12px; }
+  .gwr-sort-control select { height: 38px; }
+  .gwr-catalog-grid { gap: 14px; }
+
+  .gwr-vehicle-card { grid-template-columns: minmax(280px, 35%) minmax(0, 1fr) minmax(170px, 20%); }
+  .gwr-vehicle-card__media { min-height: 216px; }
+  .gwr-vehicle-card__media-button { padding: 9px; }
+  .gwr-vehicle-card__media img { max-height: 270px; }
+  .gwr-vehicle-card__content { gap: 7px; padding: 15px 16px; }
+  .gwr-vehicle-card__title { font-size: clamp(1.12rem, 1.5vw, 1.36rem); }
+  .gwr-vehicle-card__specs { gap: 5px 10px; }
+  .gwr-vehicle-card__pricing { gap: 6px; padding: 15px; }
+  .gwr-vehicle-card__daily-price strong { font-size: clamp(1.3rem, 1.8vw, 1.58rem); }
+  .gwr-vehicle-card__cta { min-height: 40px; margin-top: 5px; }
 }
 
 @media (max-width: 1100px) {

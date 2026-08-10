@@ -220,6 +220,19 @@
     return Number.isInteger(vehicleId) && vehicleId > 0 ? vehicleId : 0;
   }
 
+  function getVehicleFallbackFromTrigger(trigger, vehicleId) {
+    var card = trigger && trigger.closest ? trigger.closest('[data-gwr-card]') : null;
+    var payloadNode = qs(card, '[data-gwr-vehicle-fallback]');
+    if (!payloadNode) return null;
+    try {
+      var vehicle = normalizeVehicleDetails(JSON.parse(payloadNode.textContent || '{}'));
+      return vehicle.id === Number(vehicleId) ? vehicle : null;
+    } catch (error) {
+      debugLog('Embedded vehicle fallback is invalid', error && error.message ? error.message : 'unknown');
+      return null;
+    }
+  }
+
   function normalizeVehicleDetailsResponse(response) {
     var payload = response;
     if (payload && payload.success === true && payload.data) payload = payload.data;
@@ -1226,6 +1239,7 @@
       var body = new URLSearchParams(query.toString());
       body.set('action', cfg.detailAjaxAction || 'gwr_get_vehicle_details');
       body.set('vehicle_id', String(vehicleId));
+      if (cfg.nonce) body.set('nonce', cfg.nonce);
       var options = { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json' }, body: body.toString() };
       if (controller) options.signal = controller.signal;
       return window.fetch(cfg.ajaxUrl, options).then(parsePublicJsonResponse);
@@ -1326,6 +1340,16 @@
     }).catch(function (error) {
       if (error && error.name === 'AbortError') return;
       if (!modal.classList.contains('is-open') || requestSequence !== vehicleRequestSequence) return;
+      var errorCode = error && (error.code || error.message) ? (error.code || error.message) : 'request_failed';
+      var serverRejectedVehicle = ['invalid_vehicle_id', 'vehicle_not_found'].indexOf(errorCode) !== -1;
+      if (!serverRejectedVehicle && context.fallbackVehicle && context.fallbackVehicle.id === context.vehicleId) {
+        content.innerHTML = renderMinimalVehicleContent(context.fallbackVehicle, context.dates, modal);
+        content.scrollTop = 0;
+        var fallbackDialog = qs(modal, '.gwr-modal__dialog');
+        if (fallbackDialog) fallbackDialog.setAttribute('aria-busy', 'false');
+        debugLog('Vehicle detail endpoint unavailable, showing embedded public details', errorCode);
+        return;
+      }
       showVehicleDetailsError(modal, content, context, error);
     }).finally(function () {
       if (context.trigger && 'disabled' in context.trigger) context.trigger.disabled = false;
@@ -1339,8 +1363,9 @@
     if (!modal || !vehicleId) throw new Error('missing_vehicle_reference');
     var card = trigger.closest('[data-gwr-card]');
     var titleNode = card ? qs(card, '.gwr-vehicle-card__title') : null;
+    var fallbackVehicle = getVehicleFallbackFromTrigger(trigger, vehicleId);
     lastModalTrigger = trigger;
-    requestVehicleModal({ modal: modal, vehicleId: vehicleId, dates: formDataObject(qs(catalog, '[data-gwr-filter-form]')), vehicleTitle: titleNode ? titleNode.textContent.trim() : '', trigger: trigger }, false);
+    requestVehicleModal({ modal: modal, vehicleId: vehicleId, dates: formDataObject(qs(catalog, '[data-gwr-filter-form]')), vehicleTitle: titleNode ? titleNode.textContent.trim() : '', fallbackVehicle: fallbackVehicle, trigger: trigger }, false);
   }
 
   function retryVehicleDetails(modal) {
@@ -1493,6 +1518,7 @@
       filterToggles.forEach(function (toggle) { toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); });
       advancedFilters.hidden = !open;
       advancedFilters.classList.toggle('is-open', open);
+      catalog.classList.toggle('gwr-filters-open', open);
     }
 
     function isDesktopFilters() {
@@ -1739,7 +1765,7 @@
       return runRequest(currentData());
     }
 
-    setAdvancedFilters(isDesktopFilters());
+    setAdvancedFilters(false);
     updateReturnLocation();
     updateFilterCount();
     renderActiveFilters();
@@ -1768,6 +1794,12 @@
     });
     qsa(form, '[data-gwr-time-role], [data-gwr-location-field]').forEach(function (input) {
       input.addEventListener('change', function () { clearFieldError(input); });
+      if (input.matches('[data-gwr-time-role]')) {
+        input.addEventListener('click', function () {
+          if (typeof input.showPicker !== 'function') return;
+          try { input.showPicker(); } catch (error) { /* The native control remains usable. */ }
+        });
+      }
     });
     qsa(secondaryForm, '[data-gwr-secondary-filter]').forEach(function (field) {
       field.addEventListener('input', updateFilterCount);
@@ -1842,14 +1874,14 @@
       if (event.target.closest('[data-gwr-retry-search]') && lastRequestData) runRequest(Object.assign({}, lastRequestData));
     });
     catalog.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && advancedFilters && !advancedFilters.hidden && !isDesktopFilters()) {
+      if (event.key === 'Escape' && advancedFilters && !advancedFilters.hidden) {
         setAdvancedFilters(false);
         if (filterToggles[0]) filterToggles[0].focus();
       }
     });
     if (window.matchMedia) {
       var filtersMedia = window.matchMedia('(min-width: 1024px)');
-      var handleFilterBreakpoint = function () { setAdvancedFilters(filtersMedia.matches); };
+      var handleFilterBreakpoint = function () { setAdvancedFilters(false); };
       if (typeof filtersMedia.addEventListener === 'function') filtersMedia.addEventListener('change', handleFilterBreakpoint);
       else if (typeof filtersMedia.addListener === 'function') filtersMedia.addListener(handleFilterBreakpoint);
     }

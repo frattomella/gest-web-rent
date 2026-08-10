@@ -974,6 +974,7 @@ class GWR_Frontend {
 			$html .= '<span class="gwr-vehicle-card__pricing-label">' . esc_html( 'request' === $price_mode ? __( 'Tariffa', 'gest-web-rent' ) : __( 'Tariffa giornaliera', 'gest-web-rent' ) ) . '</span><div class="gwr-vehicle-card__daily-price"><strong>' . esc_html( $price_label ) . '</strong>' . ( $daily_price && 'daily' === $price_mode ? '<span>' . esc_html__( '/ giorno', 'gest-web-rent' ) . '</span>' : '' ) . '</div><span class="gwr-vehicle-card__duration" data-gwr-card-duration>' . esc_html__( 'Seleziona il periodo', 'gest-web-rent' ) . '</span><span class="gwr-vehicle-card__total-note">' . esc_html__( 'Totale da confermare', 'gest-web-rent' ) . '</span>';
 		}
 		$html .= '<button type="button" class="gwr-button gwr-vehicle-card__cta" data-gwr-open-modal data-gwr-vehicle-id="' . esc_attr( $vehicle_id ) . '">' . esc_html__( 'Vedi dettagli', 'gest-web-rent' ) . '</button></div>';
+		$html .= '<script type="application/json" data-gwr-vehicle-fallback>' . wp_json_encode( $payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) . '</script>';
 		$html .= '</article>';
 		return $html;
 	}
@@ -1055,7 +1056,7 @@ class GWR_Frontend {
 		$field_id = wp_unique_id( 'gwr-' . sanitize_key( $name ) . '-' );
 		$help_id = $field_id . '-help';
 		$error_id = $field_id . '-error';
-		return '<label class="gwr-search-field gwr-search-field--time" for="' . esc_attr( $field_id ) . '"><span>' . esc_html( $label ) . '</span><input id="' . esc_attr( $field_id ) . '" type="time" name="' . esc_attr( $name ) . '" value="' . esc_attr( $value ?: '09:00' ) . '" aria-required="false" aria-describedby="' . esc_attr( $help_id . ' ' . $error_id ) . '" data-gwr-time-role="' . esc_attr( $role ) . '" data-gwr-error-target="' . esc_attr( $error_id ) . '" /><small id="' . esc_attr( $help_id ) . '" class="gwr-field-help">' . esc_html__( 'Formato 24 ore', 'gest-web-rent' ) . '</small><small id="' . esc_attr( $error_id ) . '" class="gwr-field-error" data-gwr-field-error hidden></small></label>';
+		return '<label class="gwr-search-field gwr-search-field--time" for="' . esc_attr( $field_id ) . '"><span>' . esc_html( $label ) . '</span><span class="gwr-time-control"><input id="' . esc_attr( $field_id ) . '" type="time" step="900" name="' . esc_attr( $name ) . '" value="' . esc_attr( $value ?: '09:00' ) . '" aria-required="false" aria-describedby="' . esc_attr( $help_id . ' ' . $error_id ) . '" data-gwr-time-role="' . esc_attr( $role ) . '" data-gwr-error-target="' . esc_attr( $error_id ) . '" /><span class="gwr-time-control__icon" aria-hidden="true"></span></span><small id="' . esc_attr( $help_id ) . '" class="gwr-field-help">' . esc_html__( 'Seleziona un orario', 'gest-web-rent' ) . '</small><small id="' . esc_attr( $error_id ) . '" class="gwr-field-error" data-gwr-field-error hidden></small></label>';
 	}
 
 	private static function location_field( $name, $label, $value, $options, $required, $data_attribute ) {
