@@ -38,7 +38,7 @@
   }
 
   function parseItalianDate(value) {
-    var match = String(value || '').trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    var match = String(value || '').trim().match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/);
     if (!match) return null;
     var parts = { year: Number(match[3]), month: Number(match[2]), day: Number(match[1]) };
     return validDateParts(parts.year, parts.month, parts.day) ? parts : null;
@@ -59,9 +59,33 @@
   function isoToItalianDate(value) {
     if (!value) return '';
     var italianParts = parseItalianDate(value);
-    if (italianParts) return padDatePart(italianParts.day) + '-' + padDatePart(italianParts.month) + '-' + String(italianParts.year);
+    if (italianParts) return padDatePart(italianParts.day) + '/' + padDatePart(italianParts.month) + '/' + String(italianParts.year);
     var parts = parseIsoDate(value);
-    return parts ? padDatePart(parts.day) + '-' + padDatePart(parts.month) + '-' + String(parts.year) : '';
+    return parts ? padDatePart(parts.day) + '/' + padDatePart(parts.month) + '/' + String(parts.year) : '';
+  }
+
+  function updateVisibleDate(input) {
+    if (!input || !input.closest) return;
+    var control = input.closest('.gwr-date-control');
+    var visible = qs(control, '[data-gwr-date-visible]');
+    if (!visible) return;
+    var label = isoToItalianDate(input.value || '');
+    visible.textContent = label || 'GG/MM/AAAA';
+    control.classList.toggle('has-value', !!label);
+  }
+
+  function initializeDatePicker(input) {
+    if (!input || input.getAttribute('data-gwr-date-ready') === '1') return;
+    input.setAttribute('data-gwr-date-ready', '1');
+    updateVisibleDate(input);
+    input.addEventListener('change', function () {
+      updateVisibleDate(input);
+      clearFieldError(input);
+    });
+    input.addEventListener('click', function () {
+      if (typeof input.showPicker !== 'function') return;
+      try { input.showPicker(); } catch (error) { /* The native calendar remains usable. */ }
+    });
   }
 
   function isoDateTimestamp(value) {
@@ -84,8 +108,8 @@
   function maskItalianDateInput(value) {
     var digits = String(value || '').replace(/\D/g, '').slice(0, 8);
     if (digits.length <= 2) return digits;
-    if (digits.length <= 4) return digits.slice(0, 2) + '-' + digits.slice(2);
-    return digits.slice(0, 2) + '-' + digits.slice(2, 4) + '-' + digits.slice(4);
+    if (digits.length <= 4) return digits.slice(0, 2) + '/' + digits.slice(2);
+    return digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
   }
 
   function fieldErrorNode(input) {
@@ -190,9 +214,9 @@
     var returnIso = syncDateField(returnDate);
     if (hasPeriod) {
       if (!hasPickupDate) invalidate(pickupDate, i18n.pickupDateRequired || 'Inserisci la data di ritiro.');
-      else if (!pickupIso) invalidate(pickupDate, i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
+      else if (!pickupIso) invalidate(pickupDate, i18n.invalidDate || 'Inserisci una data valida nel formato GG/MM/AAAA.');
       if (!hasReturnDate) invalidate(returnDate, i18n.returnDateRequired || 'Inserisci la data di riconsegna.');
-      else if (!returnIso) invalidate(returnDate, i18n.invalidDate || 'Inserisci una data valida nel formato GG-MM-AAAA.');
+      else if (!returnIso) invalidate(returnDate, i18n.invalidDate || 'Inserisci una data valida nel formato GG/MM/AAAA.');
 
       if (pickupIso && isoDateTimestamp(pickupIso) < todayTimestamp()) {
         invalidate(pickupDate, i18n.pastDate || 'La data di ritiro non puo essere precedente a oggi.');
@@ -499,8 +523,8 @@
       bookingInput('inquiry_last_name', 'Cognome', 'text', true, ' autocomplete="family-name"'),
       bookingInput('inquiry_email', 'Email', 'email', true, ' autocomplete="email"'),
       bookingInput('inquiry_phone', 'Telefono', 'tel', true, ' autocomplete="tel"'),
-      '<label class="gwr-booking-field"><span>Data ritiro</span><input type="date" name="inquiry_start_date" value="' + escapeHtml(startValue) + '" /></label>',
-      '<label class="gwr-booking-field"><span>Data riconsegna</span><input type="date" name="inquiry_end_date" value="' + escapeHtml(endValue) + '" /></label>',
+      '<label class="gwr-booking-field"><span>Data ritiro</span><span class="gwr-date-control' + (startValue ? ' has-value' : '') + '"><input type="date" lang="it" name="inquiry_start_date" value="' + escapeHtml(startValue) + '" data-gwr-date-picker /><span class="gwr-date-control__value" data-gwr-date-visible aria-hidden="true">' + escapeHtml(isoToItalianDate(startValue) || 'GG/MM/AAAA') + '</span><span class="gwr-date-control__icon" aria-hidden="true"></span></span></label>',
+      '<label class="gwr-booking-field"><span>Data riconsegna</span><span class="gwr-date-control' + (endValue ? ' has-value' : '') + '"><input type="date" lang="it" name="inquiry_end_date" value="' + escapeHtml(endValue) + '" data-gwr-date-picker /><span class="gwr-date-control__value" data-gwr-date-visible aria-hidden="true">' + escapeHtml(isoToItalianDate(endValue) || 'GG/MM/AAAA') + '</span><span class="gwr-date-control__icon" aria-hidden="true"></span></span></label>',
       '<label class="gwr-booking-field"><span>Tipo cliente</span><select name="inquiry_customer_type"><option value="private">Privato</option><option value="company">Azienda</option></select></label>',
       '<label class="gwr-booking-field gwr-booking-field--wide"><span>Messaggio</span><textarea name="inquiry_message" rows="4" placeholder="Aggiungi richieste o informazioni utili"></textarea></label>',
       '</div>',
@@ -1054,7 +1078,7 @@
       detailItem('Consegna', vehicle.home_delivery ? 'Disponibile a domicilio' : ''),
       detailItem('Eta minima', valueWithUnit(vehicle.min_driver_age, 'anni'))
     ].join('');
-    var rentalOverviewMarkup = rentalOverview ? '<section class="gwr-rental-overview"><header><span>Informazioni noleggio</span><h3>Cosa sapere prima di scegliere</h3></header><div class="gwr-config-grid">' + rentalOverview + '</div></section>' : '';
+    var rentalOverviewMarkup = rentalOverview ? '<section class="gwr-rental-overview"><header><h3>Informazioni noleggio</h3><span>Dati essenziali</span></header><div class="gwr-config-grid">' + rentalOverview + '</div></section>' : '';
 
     var inclusions = termsList(rentalTerms.included_services || [], false, currency);
     var exclusions = termsList(rentalTerms.excluded_services || [], true, currency);
@@ -1110,29 +1134,26 @@
     addSection('overview', 'Informazioni tecniche', overview ? '<div class="gwr-config-grid">' + overview + '</div>' : '', false);
     addSection('included', 'Incluso nel prezzo', inclusions ? '<ul class="gwr-config-included">' + inclusions + '</ul>' : '', true);
     addSection('excluded', 'Non incluso', exclusions ? '<ul class="gwr-config-included gwr-config-excluded">' + exclusions + '</ul>' : '', false);
-    addSection('coverage', 'Coperture assicurative', (coverage ? '<div class="gwr-config-grid">' + coverage + '</div>' : '') + (optionalCoverageCards ? '<div class="gwr-rental-options"><h4>Coperture opzionali</h4>' + optionalCoverageCards + '</div>' : ''), true);
+    addSection('coverage', 'Coperture assicurative', (coverage ? '<div class="gwr-config-grid">' + coverage + '</div>' : '') + (optionalCoverageCards ? '<div class="gwr-rental-options"><h4>Coperture opzionali</h4>' + optionalCoverageCards + '</div>' : ''), false);
     addSection('excesses', 'Franchigie', excessMarkup, false);
     addSection('deposit', 'Deposito cauzionale', depositMarkup, false);
-    addSection('driver', 'Requisiti del conducente', driverRequirements, true);
+    addSection('driver', 'Requisiti del conducente', driverRequirements, false);
     addSection('documents', 'Documenti richiesti', documents ? '<ul class="gwr-config-included">' + documents + '</ul>' : '', false);
     addSection('fuel', 'Politica carburante', fuelMarkup, false);
-    addSection('mileage', 'Chilometraggio', mileage, true);
+    addSection('mileage', 'Chilometraggio', mileage, false);
     if (mode === 'booking') addSection('payment', 'Pagamento', paymentMarkup, false);
     addSection('cancellation', 'Cancellazione e modifiche', cancellationMarkup, false);
-    addSection('pickup', 'Ritiro e riconsegna', pickupDetails, true);
+    addSection('pickup', 'Ritiro e riconsegna', pickupDetails, false);
     addSection('territory', 'Territorio e utilizzo', territoryMarkup, false);
-    addSection('extras', 'Extra opzionali', extraCards ? '<div class="gwr-rental-options">' + extraCards + '</div><p class="gwr-config-note">Le quantita sono indicative e vengono confermate dal concessionario.</p>' : '', true);
+    addSection('extras', 'Extra opzionali', extraCards ? '<div class="gwr-rental-options">' + extraCards + '</div><p class="gwr-config-note">Le quantita sono indicative e vengono confermate dal concessionario.</p>' : '', false);
     addSection('faq', 'Domande frequenti', faq, false);
-    addSection('features', 'Dotazioni', features ? '<div class="gwr-config-features">' + features + '</div>' : '', true);
-    addSection('description', 'Descrizione del veicolo', vehicle.description ? '<div class="gwr-config-copy">' + escapeHtml(plainText(vehicle.description)) + '</div>' : '', true);
+    addSection('features', 'Dotazioni', features ? '<div class="gwr-config-features">' + features + '</div>' : '', false);
+    addSection('description', 'Descrizione del veicolo', vehicle.description ? '<div class="gwr-config-copy">' + escapeHtml(plainText(vehicle.description)) + '</div>' : '', false);
     addSection('terms', generalTerms.title || 'Condizioni di noleggio', (generalTerms.intro ? '<div class="gwr-config-copy">' + escapeHtml(generalTerms.intro) + '</div>' : '') + (generalTerms.general_note ? '<p class="gwr-config-note">' + escapeHtml(generalTerms.general_note) + '</p>' : '') + (vehicle.rental_notes ? '<div class="gwr-config-copy">' + escapeHtml(plainText(vehicle.rental_notes)) + '</div>' : '') + (generalTerms.updated_at ? '<p class="gwr-config-note">Aggiornate il ' + escapeHtml(isoToItalianDate(generalTerms.updated_at)) + '</p>' : '') + (generalTerms.terms_url ? '<p><a href="' + escapeHtml(safeHttpUrl(generalTerms.terms_url)) + '" target="_blank" rel="noopener noreferrer">Consulta le condizioni complete</a></p>' : ''), false);
 
-    var sectionNav = sections.length > 3 ? '<nav class="gwr-config-nav" aria-label="Sezioni del dettaglio">' + sections.map(function (section) {
-      return '<button type="button" data-gwr-scroll-section="gwr-config-' + escapeHtml(section.id) + '">' + escapeHtml(section.title) + '</button>';
-    }).join('') + '</nav>' : '';
-    var sectionMarkup = sections.map(function (section) {
+    var sectionMarkup = '<div class="gwr-config-sections">' + sections.map(function (section) {
       return configuratorSection(section.id, section.title, section.content, section.open);
-    }).join('');
+    }).join('') + '</div>';
 
     var privacyNote = (cfg.contact && cfg.contact.privacyNote) || 'La disponibilita e indicativa: contatta il concessionario per conferma e dettagli.';
     var primaryHref = links.whatsapp || links.email || '';
@@ -1196,7 +1217,6 @@
       '<main class="gwr-vehicle-configurator__main">',
       gallery,
       rentalOverviewMarkup,
-      sectionNav,
       sectionMarkup,
       '</main>',
       summary,
@@ -1344,6 +1364,7 @@
   }
 
   function prepareModalSections(modal) {
+    qsa(modal, '[data-gwr-date-picker]').forEach(initializeDatePicker);
     if (!window.matchMedia || !window.matchMedia('(max-width: 768px)').matches) return;
     qsa(modal, '[data-gwr-config-section]').forEach(function (section, index) {
       if (index < 2) return;
@@ -1828,13 +1849,7 @@
     setView(savedView, false);
     filterToggles.forEach(function (toggle) { toggle.addEventListener('click', function () { setAdvancedFilters(toggle.getAttribute('aria-expanded') !== 'true'); }); });
     if (differentReturn) differentReturn.addEventListener('change', updateReturnLocation);
-    qsa(form, '[data-gwr-date-picker]').forEach(function (input) {
-      input.addEventListener('change', function () { clearFieldError(input); });
-      input.addEventListener('click', function () {
-        if (typeof input.showPicker !== 'function') return;
-        try { input.showPicker(); } catch (error) { /* The native calendar remains usable. */ }
-      });
-    });
+    qsa(form, '[data-gwr-date-picker]').forEach(initializeDatePicker);
     qsa(form, '[data-gwr-time-role], [data-gwr-location-field]').forEach(function (input) {
       input.addEventListener('change', function () { clearFieldError(input); });
       if (input.matches('[data-gwr-time-role]')) {

@@ -806,9 +806,52 @@ class GWR_Frontend {
 
 	private static function filtered_vehicles( $filters, &$error = '' ) {
 		$query_filters = $filters;
-		$range = GWR_CPT::normalize_date_range( $filters['start_date'], $filters['end_date'] );
-		if ( is_wp_error( $range ) ) { $error = $range->get_error_message(); $query_filters['start_date'] = ''; $query_filters['end_date'] = ''; } else { $query_filters['start_date'] = $range['start_date']; $query_filters['end_date'] = $range['end_date']; }
-		return GWR_CPT::get_vehicles( array( 'frontend' => true, 'search' => $query_filters['search'], 'category' => $query_filters['category'], 'brand' => $query_filters['brand'], 'fuel' => $query_filters['fuel'], 'transmission' => $query_filters['transmission'], 'location' => $query_filters['location'], 'max_price' => $query_filters['max_price'], 'seats' => $query_filters['seats'], 'start_date' => $query_filters['start_date'], 'end_date' => $query_filters['end_date'] ) );
+		$query_filters['start_date'] = '';
+		$query_filters['end_date']   = '';
+		$vehicles = GWR_CPT::get_vehicles(
+			array(
+				'frontend'     => true,
+				'search'       => $query_filters['search'],
+				'category'     => $query_filters['category'],
+				'brand'        => $query_filters['brand'],
+				'fuel'         => $query_filters['fuel'],
+				'transmission' => $query_filters['transmission'],
+				'location'     => $query_filters['location'],
+				'max_price'    => $query_filters['max_price'],
+				'seats'        => $query_filters['seats'],
+			)
+		);
+
+		$period = self::detail_period( $filters );
+		if ( is_wp_error( $period ) ) {
+			$error = $period->get_error_message();
+			return $vehicles;
+		}
+		if ( ! $period || ! class_exists( 'GWR_Bookings' ) ) {
+			return $vehicles;
+		}
+
+		static $availability_cache = array();
+		return array_values(
+			array_filter(
+				$vehicles,
+				static function ( $vehicle ) use ( $period, &$error, &$availability_cache ) {
+					$vehicle_id = absint( $vehicle['id'] ?? 0 );
+					$cache_key  = $vehicle_id . '|' . $period['pickup_mysql'] . '|' . $period['return_mysql'];
+					if ( array_key_exists( $cache_key, $availability_cache ) ) {
+						return $availability_cache[ $cache_key ];
+					}
+					try {
+						$availability_cache[ $cache_key ] = GWR_Bookings::is_period_available( $vehicle_id, $period['pickup_mysql'], $period['return_mysql'] );
+					} catch ( Throwable $exception ) {
+						GWR_Frontend::debug_detail_error( 'catalog_availability', $vehicle_id, $exception );
+						$error = __( 'La disponibilita non e verificabile in questo momento. I veicoli mostrati richiedono conferma.', 'gest-web-rent' );
+						$availability_cache[ $cache_key ] = true;
+					}
+					return $availability_cache[ $cache_key ];
+				}
+			)
+		);
 	}
 
 	private static function normalize_request_date( $value ) {
@@ -831,7 +874,7 @@ class GWR_Frontend {
 			return checkdate( (int) $matches[2], (int) $matches[3], (int) $matches[1] ) ? $value : '';
 		}
 
-		if ( preg_match( '/^(\d{2})-(\d{2})-(\d{4})$/', $value, $matches ) && checkdate( (int) $matches[2], (int) $matches[1], (int) $matches[3] ) ) {
+		if ( preg_match( '/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/', $value, $matches ) && checkdate( (int) $matches[2], (int) $matches[1], (int) $matches[3] ) ) {
 			return sprintf( '%04d-%02d-%02d', (int) $matches[3], (int) $matches[2], (int) $matches[1] );
 		}
 
@@ -845,7 +888,7 @@ class GWR_Frontend {
 		}
 
 		$parts = explode( '-', $iso_date );
-		return $parts[2] . '-' . $parts[1] . '-' . $parts[0];
+		return $parts[2] . '/' . $parts[1] . '/' . $parts[0];
 	}
 
 	private static function date_summary( $filters ) {
@@ -1083,9 +1126,10 @@ class GWR_Frontend {
 		$help_id = $field_id . '-help';
 		$error_id = $field_id . '-error';
 		$iso_value = self::date_to_iso( $value );
+		$display_value = self::date_to_display( $iso_value );
 
 		$html = '<label class="gwr-search-field gwr-search-field--date" for="' . esc_attr( $field_id ) . '"><span>' . esc_html( $label ) . '</span>';
-		$html .= '<span class="gwr-date-control"><input id="' . esc_attr( $field_id ) . '" type="date" name="' . esc_attr( $name ) . '" value="' . esc_attr( $iso_value ) . '" min="' . esc_attr( current_time( 'Y-m-d' ) ) . '" autocomplete="off" aria-required="false" aria-describedby="' . esc_attr( $help_id . ' ' . $error_id ) . '" data-gwr-date-picker data-gwr-date-role="' . esc_attr( $role ) . '" data-gwr-error-target="' . esc_attr( $error_id ) . '" /><span class="gwr-date-control__icon" aria-hidden="true"></span></span>';
+		$html .= '<span class="gwr-date-control' . ( $iso_value ? ' has-value' : '' ) . '"><input id="' . esc_attr( $field_id ) . '" type="date" lang="it" name="' . esc_attr( $name ) . '" value="' . esc_attr( $iso_value ) . '" min="' . esc_attr( current_time( 'Y-m-d' ) ) . '" autocomplete="off" aria-required="false" aria-describedby="' . esc_attr( $help_id . ' ' . $error_id ) . '" data-gwr-date-picker data-gwr-date-role="' . esc_attr( $role ) . '" data-gwr-error-target="' . esc_attr( $error_id ) . '" /><span class="gwr-date-control__value" data-gwr-date-visible aria-hidden="true">' . esc_html( $display_value ?: 'GG/MM/AAAA' ) . '</span><span class="gwr-date-control__icon" aria-hidden="true"></span></span>';
 		$html .= '<small id="' . esc_attr( $help_id ) . '" class="gwr-field-help">' . esc_html__( 'Seleziona dal calendario', 'gest-web-rent' ) . '</small><small id="' . esc_attr( $error_id ) . '" class="gwr-field-error" data-gwr-field-error hidden></small></label>';
 		return $html;
 	}

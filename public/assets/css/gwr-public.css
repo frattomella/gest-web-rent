@@ -262,16 +262,45 @@
   position: relative;
   display: block;
   min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
 }
 
-.gwr-filter-panel .gwr-date-control input[type="date"] {
+.gwr-date-control input[type="date"] {
   position: relative;
+  z-index: 2;
+  width: 100%;
   padding-right: 44px;
   line-height: normal;
   appearance: auto;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
   color-scheme: light;
   cursor: pointer;
 }
+
+.gwr-date-control input[type="date"]::-webkit-datetime-edit { color: transparent; }
+
+.gwr-date-control__value {
+  position: absolute;
+  top: 50%;
+  right: 44px;
+  left: 16px;
+  z-index: 1;
+  overflow: hidden;
+  color: #8a96a8;
+  font-size: .9rem;
+  font-weight: 560;
+  line-height: 1;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.gwr-date-control.has-value .gwr-date-control__value { color: var(--gwr-ink); }
 
 .gwr-date-control__icon {
   position: absolute;
@@ -279,12 +308,13 @@
   right: 14px;
   width: 18px;
   height: 18px;
+  z-index: 3;
   pointer-events: none;
   transform: translateY(-50%);
   background: center / 18px 18px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2364758b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M16 3v4M8 3v4M3 10h18'/%3E%3C/svg%3E");
 }
 
-.gwr-filter-panel .gwr-date-control input[type="date"]::-webkit-calendar-picker-indicator {
+.gwr-date-control input[type="date"]::-webkit-calendar-picker-indicator {
   position: absolute;
   inset: 0 0 0 auto;
   width: 42px;
@@ -1201,31 +1231,31 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 
 .gwr-vehicle-configurator__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 330px);
-  gap: 22px;
+  grid-template-columns: minmax(0, 1fr) minmax(285px, 315px);
+  gap: 14px;
   align-items: start;
-  padding: 24px;
+  padding: 16px;
 }
 
 .gwr-vehicle-configurator__main {
   display: grid;
-  gap: 18px;
+  gap: 12px;
   min-width: 0;
 }
 
 .gwr-config-gallery {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .gwr-modal-gallery-frame {
   position: relative;
   overflow: hidden;
-  aspect-ratio: 4 / 3;
-  min-height: clamp(280px, 42vh, 470px);
-  max-height: 500px;
+  aspect-ratio: 16 / 9;
+  min-height: clamp(240px, 36vh, 380px);
+  max-height: 410px;
   border: 1px solid var(--gwr-border);
-  border-radius: 20px;
+  border-radius: 16px;
   background: #f1f4f8;
   box-shadow: var(--gwr-shadow-sm);
   touch-action: pan-y;
@@ -1343,15 +1373,15 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  min-height: 88px;
-  padding: 18px 82px 18px 26px;
+  gap: 14px;
+  min-height: 70px;
+  padding: 11px 76px 11px 18px;
   border-bottom: 1px solid var(--gwr-border);
   background: rgba(255, 255, 255, .96);
   backdrop-filter: blur(12px);
 }
 
-.gwr-vehicle-configurator__header > div { display: grid; gap: 4px; min-width: 0; }
+.gwr-vehicle-configurator__header > div { display: grid; gap: 2px; min-width: 0; }
 
 .gwr-config-category {
   color: var(--gwr-primary);
@@ -1364,8 +1394,8 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 .gwr-vehicle-configurator__header h2 {
   margin: 0;
   color: var(--gwr-ink);
-  font-size: clamp(1.55rem, 2.4vw, 2.25rem);
-  line-height: 1.08;
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  line-height: 1.05;
   letter-spacing: -.035em;
 }
 
@@ -1373,8 +1403,8 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   margin: 0;
   overflow: hidden;
   color: var(--gwr-muted);
-  font-size: .84rem;
-  line-height: 1.45;
+  font-size: .76rem;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1430,21 +1460,29 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 .gwr-config-nav button:hover,
 .gwr-config-nav button:focus { background: var(--gwr-primary-soft); color: var(--gwr-primary); }
 
-.gwr-config-section { scroll-margin-top: 148px; }
+.gwr-config-section { scroll-margin-top: 92px; }
+
+.gwr-config-sections {
+  overflow: hidden;
+  border: 1px solid var(--gwr-border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.gwr-config-sections .gwr-config-section + .gwr-config-section { border-top: 1px solid var(--gwr-border); }
 
 .gwr-rental-overview {
   display: grid;
-  gap: 14px;
-  padding: 18px;
-  border: 1px solid #cbd8ef;
-  border-radius: 18px;
-  background: linear-gradient(145deg, #fff, var(--gwr-primary-soft));
-  box-shadow: var(--gwr-shadow-sm);
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--gwr-border);
+  border-radius: 14px;
+  background: #fff;
 }
 
-.gwr-rental-overview > header { display: grid; gap: 3px; }
+.gwr-rental-overview > header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .gwr-rental-overview > header span { color: var(--gwr-primary); font-size: .68rem; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
-.gwr-rental-overview > header h3 { margin: 0; color: var(--gwr-ink); font-size: 1.08rem; }
+.gwr-rental-overview > header h3 { margin: 0; color: var(--gwr-ink); font-size: .96rem; }
 
 .gwr-config-section h3 { margin: 0; }
 
@@ -1454,12 +1492,12 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  min-height: 54px;
-  padding: 0;
+  min-height: 44px;
+  padding: 0 12px;
   border: 0;
   background: transparent;
   color: var(--gwr-ink);
-  font-size: 1.03rem;
+  font-size: .88rem;
   font-weight: 760;
   text-align: left;
   cursor: pointer;
@@ -1480,8 +1518,7 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 .gwr-config-price-detail button[aria-expanded="true"] i { transform: rotate(225deg) translate(-2px, -2px); }
 
 .gwr-config-section__content {
-  padding: 0 0 20px;
-  border-bottom: 1px solid var(--gwr-border);
+  padding: 0 12px 12px;
 }
 
 .gwr-config-section__content[hidden] { display: none; }
@@ -1499,16 +1536,16 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 .gwr-config-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 7px;
 }
 
 .gwr-config-detail {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
-  padding: 13px 14px;
+  padding: 9px 10px;
   border: 1px solid var(--gwr-border);
-  border-radius: 13px;
+  border-radius: 10px;
   background: #fff;
 }
 
@@ -1520,7 +1557,7 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   text-transform: uppercase;
 }
 
-.gwr-config-detail > strong { color: var(--gwr-ink); font-size: .9rem; line-height: 1.35; }
+.gwr-config-detail > strong { color: var(--gwr-ink); font-size: .82rem; line-height: 1.3; }
 .gwr-config-detail.is-positive { border-color: #cce8d5; background: #f5fbf7; }
 
 .gwr-config-included {
@@ -1790,14 +1827,14 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 
 .gwr-vehicle-configurator__summary {
   position: sticky;
-  top: 114px;
+  top: 84px;
   display: grid;
-  gap: 14px;
-  max-height: calc(94vh - 150px);
+  gap: 10px;
+  max-height: calc(94vh - 104px);
   overflow: auto;
-  padding: 20px;
+  padding: 15px;
   border: 1px solid var(--gwr-border);
-  border-radius: 18px;
+  border-radius: 15px;
   background: #fff;
   box-shadow: var(--gwr-shadow-md);
   scrollbar-width: thin;
@@ -1805,27 +1842,27 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 
 .gwr-config-summary__vehicle {
   display: grid;
-  gap: 4px;
-  padding-bottom: 14px;
+  gap: 3px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--gwr-border);
 }
 
 .gwr-config-summary__vehicle > span { color: var(--gwr-primary); font-size: .66rem; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
-.gwr-config-summary__vehicle h3 { margin: 0; color: var(--gwr-ink); font-size: 1.32rem; line-height: 1.12; letter-spacing: -.025em; }
+.gwr-config-summary__vehicle h3 { margin: 0; color: var(--gwr-ink); font-size: 1.12rem; line-height: 1.1; letter-spacing: -.02em; }
 .gwr-config-summary__vehicle p { margin: 0; color: var(--gwr-muted); font-size: .73rem; line-height: 1.45; }
 
 .gwr-config-summary__eyebrow { color: var(--gwr-primary); font-size: .7rem; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; }
 
-.gwr-booking-point { display: grid; gap: 3px; padding-left: 14px; border-left: 2px solid #cbd8ef; }
+.gwr-booking-point { display: grid; gap: 2px; padding-left: 10px; border-left: 2px solid #cbd8ef; }
 .gwr-booking-point > span, .gwr-config-duration > span, .gwr-config-price > span { color: var(--gwr-muted); font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.gwr-booking-point > strong { color: var(--gwr-ink); font-size: .88rem; }
+.gwr-booking-point > strong { color: var(--gwr-ink); font-size: .82rem; }
 .gwr-booking-point > small { color: var(--gwr-muted); font-size: .74rem; }
 
-.gwr-config-duration { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 0; border-top: 1px solid var(--gwr-border); border-bottom: 1px solid var(--gwr-border); }
+.gwr-config-duration { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--gwr-border); border-bottom: 1px solid var(--gwr-border); }
 .gwr-config-duration > strong { color: var(--gwr-ink); font-size: .86rem; text-align: right; }
 
 .gwr-config-price { display: grid; gap: 3px; padding: 4px 0; }
-.gwr-config-price > strong { color: var(--gwr-ink); font-size: 1.75rem; line-height: 1; letter-spacing: -.03em; }
+.gwr-config-price > strong { color: var(--gwr-ink); font-size: 1.5rem; line-height: 1; letter-spacing: -.03em; }
 .gwr-config-price > small { color: var(--gwr-muted); font-size: .76rem; }
 
 .gwr-base-tariffs {
@@ -1836,7 +1873,7 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   background: var(--gwr-surface-muted);
 }
 
-.gwr-base-tariffs > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border-bottom: 1px solid var(--gwr-border); }
+.gwr-base-tariffs > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-bottom: 1px solid var(--gwr-border); }
 .gwr-base-tariffs > div:last-child { border-bottom: 0; }
 .gwr-base-tariffs span { color: var(--gwr-muted); font-size: .72rem; font-weight: 650; }
 .gwr-base-tariffs strong { color: var(--gwr-ink); font-size: .9rem; text-align: right; }
@@ -1852,7 +1889,7 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
 
 .gwr-config-availability { display: inline-flex; justify-self: start; min-height: 30px; align-items: center; padding: 0 10px; border-radius: 999px; background: #edf9f1; color: var(--gwr-success); font-size: .7rem; font-weight: 700; }
 
-.gwr-config-contact { display: grid; gap: 9px; padding-top: 4px; }
+.gwr-config-contact { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--gwr-border); }
 .gwr-config-contact h3 { margin: 0; color: var(--gwr-ink); font-size: .96rem; }
 .gwr-config-contact > p { margin: 0; color: var(--gwr-muted); font-size: .72rem; line-height: 1.5; }
 
@@ -1860,7 +1897,7 @@ body.admin-bar .gwr-modal { --gwr-admin-bar-offset: 32px; }
   display: grid;
   place-items: center;
   gap: 2px;
-  min-height: 52px;
+  min-height: 46px;
   padding: 8px 14px;
   border: 0;
   border-radius: 13px;
